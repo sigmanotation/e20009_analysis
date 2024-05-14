@@ -20,8 +20,6 @@ class ICParameters:
         The maximum peak width parameter used in scipy.signal.find_peaks
     peak_threshold: float
         The minimum amplitude of a valid peak
-    ic_multiplicity: int
-        The maximum allowed ion chamber multiplicity
     """
 
     baseline_window_scale: float
@@ -29,7 +27,6 @@ class ICParameters:
     peak_prominence: float
     peak_max_width: float
     peak_threshold: float
-    ic_multiplicity: int
 
 
 @dataclass
