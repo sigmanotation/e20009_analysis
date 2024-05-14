@@ -4,8 +4,8 @@ from spyral import (
     GetParameters
 )
 
-from e20009_analysis.e20009_phases.PointcloudPhase import PointcloudLegacyPhase
-from e20009_analysis.e20009_phases.config import (
+from e20009_phases.PointcloudLegacyPhase import PointcloudLegacyPhase
+from e20009_phases.config import (
     ICParameters,
     DetectorParameters,
     PadParameters,
