@@ -1,0 +1,1 @@
+e20009_analysis is a git repository of phases needed for the attpc_spyral package to analyze the AT-TPC experiment e20009. To use this repository, first install [attpc_spyral](https://github.com/ATTPC/Spyral). Then clone this repository, adjust the run_spyral.py file as needed, and run it!
