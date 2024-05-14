@@ -28,7 +28,7 @@ from spyral.phases.schema import TRACE_SCHEMA, POINTCLOUD_SCHEMA
 from spyral.core.hardware_id import hardware_id_from_array
 
 # Import e20009 specific data classes
-from config import ICParameters, DetectorParameters, PadParameters
+from e20009_phases.config import ICParameters, DetectorParameters, PadParameters
 
 import h5py as h5
 import numpy as np
@@ -215,6 +215,8 @@ class PointcloudLegacyPhase(PhaseLike):
 
         # Process the data
         for idx in range(min_event, max_event + 1):
+            if count==100:
+                break
             count += 1
             if count > flush_val:
                 count = 0
@@ -299,11 +301,7 @@ class PointcloudLegacyPhase(PhaseLike):
 
         # Write beam events results to a dataframe
         df = pl.DataFrame(beam_events)
-        df.write_parquet(
-            workspace_path
-            / "beam_events"
-            / f"{form_run_string(payload.run_number)}.parquet"
-        )
+        df.write_parquet(workspace_path / "beam_events" / f"{form_run_string(payload.run_number)}.parquet")
 
         spyral_info(__name__, "Phase 1 complete")
         return result
@@ -410,7 +408,7 @@ class GetLegacyEvent:
                 and trace.hw_id.aget_channel == 0
             ):
                 self.ic_trace = trace
-                self.ic_trace.find_peaks(ic_params, rel_height=0.5, min_width=4.0)  # type: ignore
+                self.ic_trace.find_peaks(ic_params, rng, rel_height=0.5, min_width=4.0)  # type: ignore
                 # Remove peaks outside of active time window of AT-TPC
                 self.ic_trace.remove_peaks(60, 411)
 
@@ -421,7 +419,7 @@ class GetLegacyEvent:
                 and trace.hw_id.aget_channel == 34
             ):
                 self.ic_sca_trace = trace
-                self.ic_sca_trace.find_peaks(ic_params, rel_height=0.5)
+                self.ic_sca_trace.find_peaks(ic_params, rng, rel_height=0.5)
                 # Remove peaks outside of active time window of AT-TPC
                 self.ic_sca_trace.remove_peaks(60, 411)
 
@@ -432,9 +430,9 @@ class GetLegacyEvent:
                 and trace.hw_id.aget_channel == 34
             ):
                 self.beam_ds_trace = trace
-                self.beam_ds_trace.find_peaks(ic_params, rel_height=0.8)
+                self.beam_ds_trace.find_peaks(ic_params, rng, rel_height=0.8)
 
-        # Remove CoBo 10 from our normal traces
+        # Remove CoBo 10 from our normal traces along with any other traces with 10 or more points
         self.traces = [
             trace
             for trace in self.traces

@@ -1,115 +1,77 @@
 from spyral import (
     Pipeline,
     start_pipeline,
-    PointcloudPhase,
-    ClusterPhase,
-    EstimationPhase,
-    InterpSolverPhase,
+    GetParameters
 )
-from spyral import (
-    PadParameters,
-    GetParameters,
-    FribParameters,
+
+from e20009_analysis.e20009_phases.PointcloudPhase import PointcloudLegacyPhase
+from e20009_analysis.e20009_phases.config import (
+    ICParameters,
     DetectorParameters,
-    ClusterParameters,
-    SolverParameters,
-    EstimateParameters,
-    INVALID_PATH,
+    PadParameters,
 )
 
 from pathlib import Path
 import multiprocessing
 
-workspace_path = Path("/path/to/your/workspace/")
-trace_path = Path("/path/to/your/attpc/traces/")
+workspace_path = Path("D:\\e20009_analysis")
+trace_path = Path("D:\\h5")
 
-run_min = 94
-run_max = 94
-n_processes = 4
+# Make directory to store beam events
+beam_events_folder = workspace_path / "beam_events"
+if not beam_events_folder.exists():
+    beam_events_folder.mkdir()
+
+run_min = 344
+run_max = 345
+n_processes = 10
 
 pad_params = PadParameters(
-    is_default=True,
-    is_default_legacy=False,
-    pad_geometry_path=INVALID_PATH,
-    pad_gain_path=INVALID_PATH,
-    pad_time_path=INVALID_PATH,
-    pad_electronics_path=INVALID_PATH,
-    pad_scale_path=INVALID_PATH,
+    is_default=False,
+    is_default_legacy=True,
+    pad_geometry_path=Path("C:\\Users\\zachs\Desktop\\attpc_spyral\\e20009_analysis\\e20009_parameters\\padxy_legacy.csv"),
+    pad_time_path=Path("C:\\Users\\zachs\\Desktop\\attpc_spyral\\e20009_analysis\\e20009_parameters\\pad_time_correction.csv"),
+    pad_electronics_path=Path("C:\\Users\\zachs\\Desktop\\attpc_spyral\\e20009_analysis\\e20009_parameters\\pad_electronics_legacy.csv"),
+    pad_scale_path=Path("C:\\Users\\zachs\\Desktop\\attpc_spyral\\e20009_analysis\\e20009_parameters\\gain_match_factors.csv"),
 )
 
 get_params = GetParameters(
     baseline_window_scale=20.0,
-    peak_separation=50.0,
+    peak_separation=5.0,
     peak_prominence=20.0,
-    peak_max_width=50.0,
-    peak_threshold=40.0,
+    peak_max_width=100.0,
+    peak_threshold=30.0,
 )
 
-frib_params = FribParameters(
+ic_params = ICParameters(
     baseline_window_scale=100.0,
-    peak_separation=50.0,
-    peak_prominence=20.0,
-    peak_max_width=500.0,
-    peak_threshold=100.0,
-    ic_delay_time_bucket=1100,
-    ic_multiplicity=1,
-    correct_ic_time=True,
+    peak_separation=5.0,
+    peak_prominence=30.0,
+    peak_max_width=20.0,
+    peak_threshold=300.0
 )
 
 det_params = DetectorParameters(
-    magnetic_field=2.85,
-    electric_field=45000.0,
+    magnetic_field=3.0,
+    electric_field=60000.0,
     detector_length=1000.0,
-    beam_region_radius=25.0,
-    micromegas_time_bucket=10.0,
-    window_time_bucket=560.0,
-    get_frequency=6.25,
-    garfield_file_path=Path("/path/to/some/garfield.txt"),
+    drift_velocity_path=Path("C:\\Users\\zachs\\Desktop\\attpc_spyral\\e20009_analysis\\e20009_parameters\\drift_velocity.csv"),
+    get_frequency=3.125,
+    garfield_file_path=Path("C:\\Users\\zachs\\Desktop\\attpc_spyral\\e20009_analysis\\e20009_parameters\\electrons.txt"),
     do_garfield_correction=False,
 )
 
-cluster_params = ClusterParameters(
-    min_cloud_size=50,
-    min_points=3,
-    min_size_scale_factor=0.05,
-    min_size_lower_cutoff=10,
-    cluster_selection_epsilon=10.0,
-    circle_overlap_ratio=0.5,
-    fractional_charge_threshold=0.8,
-    outlier_scale_factor=0.05,
-)
-
-estimate_params = EstimateParameters(
-    min_total_trajectory_points=30, smoothing_factor=100.0
-)
-
-solver_params = SolverParameters(
-    gas_data_path=Path("/path/to/some/gas/data.json"),
-    particle_id_filename=Path("/path/to/some/particle/id.json"),
-    ic_min_val=900.0,
-    ic_max_val=1350.0,
-    n_time_steps=1000,
-    interp_ke_min=0.1,
-    interp_ke_max=70.0,
-    interp_ke_bins=350,
-    interp_polar_min=2.0,
-    interp_polar_max=88.0,
-    interp_polar_bins=166,
-)
 
 pipe = Pipeline(
     [
-        PointcloudPhase(
+        PointcloudLegacyPhase(
             get_params,
-            frib_params,
+            ic_params,
             det_params,
             pad_params,
-        ),
-        ClusterPhase(cluster_params, det_params),
-        EstimationPhase(estimate_params, det_params),
-        InterpSolverPhase(solver_params, det_params),
+        )
     ],
-    [True, True, True, True],
+    [True],
     workspace_path,
     trace_path,
 )
