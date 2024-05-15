@@ -37,6 +37,12 @@ from scipy import signal
 from pathlib import Path
 from multiprocessing import SimpleQueue
 
+"""
+Changes from attpc_spyral package base code (circa May 2024):
+    - PointcloudLegacyPhase takes as
+    - ClusterPhase appends the IC SCA centroid and multiplicity information to the result
+"""
+
 
 def get_event_range(trace_file: h5.File) -> tuple[int, int]:
     """
@@ -69,8 +75,8 @@ class PointcloudLegacyPhase(PhaseLike):
     ----------
     get_params: GetParameters
         Parameters controlling the GET-DAQ signal analysis
-    frib_params: FribParameters
-        Parameters repurposed in legacy to analyze auxilary detectors (IC, Si, etc)
+    ic_params: ICParameters
+        Parameters related to the IC and CoBo 10
     detector_params: DetectorParameters
         Parameters describing the detector
     pad_params: PadParameters
@@ -80,8 +86,8 @@ class PointcloudLegacyPhase(PhaseLike):
     ----------
     get_params: GetParameters
         Parameters controlling the GET-DAQ signal analysis
-    frib_params: FribParameters
-        Parameters repurposed in legacy to analyze auxilary detectors (IC, Si, etc)
+    ic_params: ICParameters
+        Parameters related to the IC and CoBo 10
     det_params: DetectorParameters
         Parameters describing the detector
     pad_map: PadMap
@@ -205,12 +211,12 @@ class PointcloudLegacyPhase(PhaseLike):
             flush_val = 0
         else:
             flush_percent = 0.01
-            flush_val = int(flush_percent * (max_event - min_event))
+            flush_val = int(flush_percent * (max_event - min_event + 1))
             total = 100
 
         count = 0
 
-        msg = StatusMessage(self.name, 1, total, 1)  # We always increment by 1
+        msg = StatusMessage(self.name, 1, total, payload.run_number)  # We always increment by 1
 
         # Process the data
         for idx in range(min_event, max_event + 1):
@@ -319,8 +325,8 @@ class GetLegacyEvent:
         The event number
     get_params: GetParameters
         Configuration parameters controlling the GET signal analysis
-    ic_params: FribParameters
-        Configuration parameters controlling the ion chamber signal analysis
+    ic_params: ICParameters
+        Configuration parameters related to the IC and CoBo 10
     rng: numpy.random.Generator
         A random number generator for use in the signal analysis
 
@@ -328,8 +334,12 @@ class GetLegacyEvent:
     ----------
     traces: list[GetTrace]
         The pad plane traces from the event
-    external_traces: list[GetTrace]
-        Traces from external (non-pad plane) sources
+    ic_trace: GetTrace | None
+        Trace of IC signal
+    ic_sca_trace: GetTrace | None
+        Trace of IC SCA signal
+    beam_ds_trace: GetTrace | None
+        Trace of downscale beam signal
     name: str
         The event name
     number:
@@ -379,8 +389,8 @@ class GetLegacyEvent:
             The event number
         get_params: GetParameters
             Configuration parameters controlling the GET signal analysis
-        ic_params: FribParameters
-            Configuration parameters controlling the ion chamber signal analysis
+        ic_params: ICParameters
+            Configuration parameters related to the IC and CoBo 10
         rng: numpy.random.Generator
             A random number generator for use in the signal analysis
         """
@@ -475,12 +485,14 @@ class GetTrace:
         Check if the trace is valid
     get_pad_id() -> int
         Get the pad id for this trace
-    find_peaks(params: GetParameters, rng: numpy.random.Generator, rel_height: float)
+    find_peaks(params: GetParameters, rng: numpy.random.Generator, rel_height: float, min_width: float)
         Find the peaks in the trace
     get_number_of_peaks() -> int
         Get the number of peaks found in the trace
     get_peaks(params: GetParameters) -> list[Peak]
         Get the peaks found in the trace
+    remove_peaks(low_cut: int, high_cut: int) -> list[Peak]
+        Remove peaks above and below the indicated cuts
     """
 
     def __init__(
@@ -623,7 +635,7 @@ class GetTrace:
         """
         return self.peaks
 
-    def remove_peaks(self, low_cut: int, high_cut: int):
+    def remove_peaks(self, low_cut: int, high_cut: int) -> list[Peak]:
         """Remove all peaks below and above the indicated cutoffs.
 
         Parameters
@@ -664,7 +676,7 @@ class PointCloud:
         Check if the point cloud is valid
     retrieve_spatial_coordinates() -> ndarray
         Get the positional data from the point cloud
-    calibrate_z_position(micromegas_tb: float, window_tb: float, detector_length: float, ic_correction: float = 0.0)
+    calibrate_z_position(micromegas_tb: float, window_tb: float, detector_length: float)
         Calibrate the cloud z-position from the micromegas and window time references
     remove_illegal_points(detector_length: float)
         Remove any points which lie outside the legal detector bounds in z
@@ -774,8 +786,7 @@ class PointCloud:
         micromegas_tb: float,
         window_tb: float,
         detector_length: float,
-        efield_correction: ElectronCorrector | None = None,
-        ic_correction: float = 0.0,
+        efield_correction: ElectronCorrector | None = None
     ):
         """Calibrate the cloud z-position from the micromegas and window time references
 
@@ -792,8 +803,6 @@ class PointCloud:
             The detector length in mm
         efield_correction: ElectronCorrector | None
             The optional Garfield electric field correction to the electron drift
-        ic_correction: float
-            The ion chamber time correction in GET Time Buckets
         """
         # Maybe use mm as the reference because it is more stable?
         for idx, point in enumerate(self.cloud):

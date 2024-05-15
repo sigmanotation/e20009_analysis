@@ -1,10 +1,12 @@
 from spyral import (
     Pipeline,
     start_pipeline,
-    GetParameters
+    GetParameters,
+    ClusterParameters
 )
 
 from e20009_phases.PointcloudLegacyPhase import PointcloudLegacyPhase
+from e20009_phases.ClusterPhase import ClusterPhase
 from e20009_phases.config import (
     ICParameters,
     DetectorParameters,
@@ -23,7 +25,7 @@ if not beam_events_folder.exists():
     beam_events_folder.mkdir()
 
 run_min = 344
-run_max = 345
+run_max = 344
 n_processes = 10
 
 pad_params = PadParameters(
@@ -61,6 +63,16 @@ det_params = DetectorParameters(
     do_garfield_correction=False,
 )
 
+cluster_params = ClusterParameters(
+    min_cloud_size=50,
+    min_points=3,
+    min_size_scale_factor=0.05,
+    min_size_lower_cutoff=10,
+    cluster_selection_epsilon=10.0,
+    circle_overlap_ratio=0.5,
+    fractional_charge_threshold=0.8,
+    outlier_scale_factor=0.05
+)
 
 pipe = Pipeline(
     [
@@ -69,9 +81,13 @@ pipe = Pipeline(
             ic_params,
             det_params,
             pad_params,
+        ),
+        ClusterPhase(
+            cluster_params,
+            det_params,
         )
     ],
-    [True],
+    [True, False],
     workspace_path,
     trace_path,
 )
