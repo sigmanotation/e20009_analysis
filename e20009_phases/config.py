@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-
-INVALID_PATH: Path = Path("IllegalPath")
+from spyral import INVALID_PATH
 
 
 @dataclass
@@ -20,6 +19,10 @@ class ICParameters:
         The maximum peak width parameter used in scipy.signal.find_peaks
     peak_threshold: float
         The minimum amplitude of a valid peak
+    low_accept: int
+        Minimum centroid value of a peak to be considered valid.
+    high_accept: int
+        Maximum centroid value of a peak to be considered valid.
     """
 
     baseline_window_scale: float
@@ -27,6 +30,8 @@ class ICParameters:
     peak_prominence: float
     peak_max_width: float
     peak_threshold: float
+    low_accept: int
+    high_accept: int
 
 
 @dataclass

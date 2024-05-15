@@ -23,7 +23,6 @@ from spyral.trace.get_legacy_event import (
 from spyral.trace.get_event import GetEvent
 from spyral.trace.peak import Peak
 from spyral.core.hardware_id import HardwareID
-from spyral.core.point_cloud import PointCloud
 from spyral.phases.schema import TRACE_SCHEMA, POINTCLOUD_SCHEMA
 from spyral.core.hardware_id import hardware_id_from_array
 
@@ -408,7 +407,7 @@ class GetLegacyEvent:
                 self.ic_trace = trace
                 self.ic_trace.find_peaks(ic_params, rng, rel_height=0.5, min_width=4.0)  # type: ignore
                 # Remove peaks outside of active time window of AT-TPC
-                self.ic_trace.remove_peaks(60, 411)
+                self.ic_trace.remove_peaks(ic_params.low_accept, ic_params.high_accept)
 
             # Extract IC SCA
             elif (
@@ -419,7 +418,7 @@ class GetLegacyEvent:
                 self.ic_sca_trace = trace
                 self.ic_sca_trace.find_peaks(ic_params, rng, rel_height=0.5)
                 # Remove peaks outside of active time window of AT-TPC
-                self.ic_sca_trace.remove_peaks(60, 411)
+                self.ic_sca_trace.remove_peaks(ic_params.low_accept, ic_params.high_accept)
 
             # Extract beam downscale beam trace
             elif (
