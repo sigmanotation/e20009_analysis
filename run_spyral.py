@@ -1,7 +1,14 @@
-from spyral import Pipeline, start_pipeline, GetParameters, ClusterParameters
+from spyral import (
+    Pipeline,
+    start_pipeline,
+    GetParameters,
+    ClusterParameters,
+    EstimateParameters,
+)
 
 from e20009_phases.PointcloudLegacyPhase import PointcloudLegacyPhase
 from e20009_phases.ClusterPhase import ClusterPhase
+from e20009_phases.EstimationPhase import EstimationPhase
 from e20009_phases.config import (
     ICParameters,
     DetectorParameters,
@@ -62,6 +69,7 @@ det_params = DetectorParameters(
     magnetic_field=3.0,
     electric_field=60000.0,
     detector_length=1000.0,
+    beam_region_radius=20.0,
     drift_velocity_path=Path(
         "/Users/attpc/Desktop/e20009_analysis/e20009_analysis/e20009_parameters/drift_velocity.csv"
     ),
@@ -83,6 +91,10 @@ cluster_params = ClusterParameters(
     outlier_scale_factor=0.05,
 )
 
+estimate_params = EstimateParameters(
+    min_total_trajectory_points=20, smoothing_factor=100.0
+)
+
 pipe = Pipeline(
     [
         PointcloudLegacyPhase(
@@ -95,8 +107,9 @@ pipe = Pipeline(
             cluster_params,
             det_params,
         ),
+        EstimationPhase(estimate_params, det_params),
     ],
-    [True, False],
+    [False, False, True],
     workspace_path,
     trace_path,
 )

@@ -46,6 +46,8 @@ class DetectorParameters:
         The magnitude of the electric field in V/m
     detector_length: float
         The detector length in mm
+    beam_region_radius: float
+        The beam region radius in mm
     drift_velocity_path: str
         Path to file containing window and micromegas edges in time buckets
         for each run to be analyzed.
@@ -59,6 +61,7 @@ class DetectorParameters:
     magnetic_field: float  # Tesla
     electric_field: float  # V/m
     detector_length: float  # mm
+    beam_region_radius: float  # mm
     drift_velocity_path: Path
     get_frequency: float  # MHz
     garfield_file_path: Path

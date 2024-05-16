@@ -24,6 +24,7 @@ from spyral.trace.get_event import GetEvent
 from spyral.trace.peak import Peak
 from spyral.core.hardware_id import HardwareID
 from spyral.phases.schema import TRACE_SCHEMA, POINTCLOUD_SCHEMA
+from spyral.phases.pointcloud_legacy_phase import get_event_range
 from spyral.core.hardware_id import hardware_id_from_array
 
 # Import e20009 specific data classes
@@ -39,28 +40,23 @@ from multiprocessing import SimpleQueue
 
 """
 Changes from attpc_spyral package base code (circa May 2024):
-    - PointcloudLegacyPhase takes as
-    - ClusterPhase appends the IC SCA centroid and multiplicity information to the result
+    - PointcloudLegacyPhase takes modified config classes found in the config.py file. These include
+      the ICParameters class (called FRIBParameters in the attpc_spyral package) and modified 
+      DetectorParameters and PadParameters. See that file for more information on their attributes.
+    - PointcloudLegacyPhase run method now takes the window and micromegas time buckets to calculate
+      the drift velocity from the indicated file in DetectorParameters. It adds IC SCA information as
+      attributes to the output HDF5 file. It also writes information related to the IC and IC SCA traces
+      to a parquet file in the workspace. Fixed small bug with nevents number being incorrect; 1 was added
+      to it.
+    - GetLegacyEvent load_traces method extracts IC SCA and downscale beam traces. It also removes traces
+      that have 10 or more points.
+    - GetTrace find_peaks method takes a new parameter called min_width. The floor is now taken for both 
+      inflection points.
+    - GetTrace has a new method called remove_peaks.
+    - PointCloud load_cloud_from_get_event method does not pull a pad gain value from a value to multiply
+      a point's integral by.
+    - PointCloud calibrate_z_position method does not take ic_correction as a parameter.
 """
-
-
-def get_event_range(trace_file: h5.File) -> tuple[int, int]:
-    """
-    The merger doesn't use attributes for legacy reasons, so everything is stored in datasets. Use this to retrieve the min and max event numbers.
-
-    Parameters
-    ----------
-    trace_file: h5py.File
-        File handle to a hdf5 file with AT-TPC traces
-
-    Returns
-    -------
-    tuple[int, int]
-        A pair of integers (first event number, last event number)
-    """
-    meta_group = trace_file.get("meta")
-    meta_data = meta_group.get("meta")  # type: ignore
-    return (int(meta_data[0]), int(meta_data[2]))  # type: ignore
 
 
 class PointcloudLegacyPhase(PhaseLike):

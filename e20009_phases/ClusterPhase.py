@@ -17,8 +17,9 @@ from numpy.random import Generator
 
 """
 Changes from attpc_spyral package base code (circa May 2024):
-    - ClusterPhase uses the PointCloud class defined in e20009_phases.PointcloudLegacyPhase
-    - ClusterPhase appends the IC SCA centroid and multiplicity information to the result
+    - ClusterPhase uses the PointCloud class defined in e20009_phases.PointcloudLegacyPhase.
+    - ClusterPhase run method appends the IC SCA centroid and multiplicity information to the result. 
+      Fixed small bug with nevents number being incorrect; 1 was added to it.
 """
 
 
@@ -153,7 +154,9 @@ class ClusterPhase(PhaseLike):
             cluster_event_group.attrs["ic_multiplicity"] = cloud_data.attrs[
                 "ic_multiplicity"
             ]
-            cluster_event_group.attrs["ic_sca_centroid"] = cloud_data.attrs["ic_sca_centroid"]
+            cluster_event_group.attrs["ic_sca_centroid"] = cloud_data.attrs[
+                "ic_sca_centroid"
+            ]
             cluster_event_group.attrs["ic_sca_multiplicity"] = cloud_data.attrs[
                 "ic_sca_multiplicity"
             ]
