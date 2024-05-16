@@ -1,9 +1,4 @@
-from spyral import (
-    Pipeline,
-    start_pipeline,
-    GetParameters,
-    ClusterParameters
-)
+from spyral import Pipeline, start_pipeline, GetParameters, ClusterParameters
 
 from e20009_phases.PointcloudLegacyPhase import PointcloudLegacyPhase
 from e20009_phases.ClusterPhase import ClusterPhase
@@ -16,25 +11,33 @@ from e20009_phases.config import (
 from pathlib import Path
 import multiprocessing
 
-workspace_path = Path("D:\\e20009_analysis")
-trace_path = Path("D:\\h5")
+workspace_path = Path("/Volumes/e20009/e20009_analysis")
+trace_path = Path("/Volumes/e20009/h5")
 
 # Make directory to store beam events
 beam_events_folder = workspace_path / "beam_events"
 if not beam_events_folder.exists():
     beam_events_folder.mkdir()
 
-run_min = 344
-run_max = 344
+run_min = 347
+run_max = 348
 n_processes = 10
 
 pad_params = PadParameters(
     is_default=False,
     is_default_legacy=True,
-    pad_geometry_path=Path("C:\\Users\\zachs\Desktop\\attpc_spyral\\e20009_analysis\\e20009_parameters\\padxy_legacy.csv"),
-    pad_time_path=Path("C:\\Users\\zachs\\Desktop\\attpc_spyral\\e20009_analysis\\e20009_parameters\\pad_time_correction.csv"),
-    pad_electronics_path=Path("C:\\Users\\zachs\\Desktop\\attpc_spyral\\e20009_analysis\\e20009_parameters\\pad_electronics_legacy.csv"),
-    pad_scale_path=Path("C:\\Users\\zachs\\Desktop\\attpc_spyral\\e20009_analysis\\e20009_parameters\\gain_match_factors.csv"),
+    pad_geometry_path=Path(
+        "/Users/attpc/Desktop/e20009_analysis/e20009_analysis/e20009_parameters/pad_geometry_legacy.csv"
+    ),
+    pad_time_path=Path(
+        "/Users/attpc/Desktop/e20009_analysis/e20009_analysis/e20009_parameters/pad_time_correction.csv"
+    ),
+    pad_electronics_path=Path(
+        "/Users/attpc/Desktop/e20009_analysis/e20009_analysis/e20009_parameters/pad_electronics_legacy.csv"
+    ),
+    pad_scale_path=Path(
+        "/Users/attpc/Desktop/e20009_analysis/e20009_analysis/e20009_parameters/pad_electronics_legacy.csv"
+    ),
 )
 
 get_params = GetParameters(
@@ -50,16 +53,22 @@ ic_params = ICParameters(
     peak_separation=5.0,
     peak_prominence=30.0,
     peak_max_width=20.0,
-    peak_threshold=300.0
+    peak_threshold=300.0,
+    low_accept=60,
+    high_accept=411,
 )
 
 det_params = DetectorParameters(
     magnetic_field=3.0,
     electric_field=60000.0,
     detector_length=1000.0,
-    drift_velocity_path=Path("C:\\Users\\zachs\\Desktop\\attpc_spyral\\e20009_analysis\\e20009_parameters\\drift_velocity.csv"),
+    drift_velocity_path=Path(
+        "/Users/attpc/Desktop/e20009_analysis/e20009_analysis/e20009_parameters/drift_velocity.csv"
+    ),
     get_frequency=3.125,
-    garfield_file_path=Path("C:\\Users\\zachs\\Desktop\\attpc_spyral\\e20009_analysis\\e20009_parameters\\electrons.txt"),
+    garfield_file_path=Path(
+        "/Users/attpc/Desktop/e20009_analysis/e20009_analysis/e20009_parameters/e20009_efield_correction.txt"
+    ),
     do_garfield_correction=False,
 )
 
@@ -71,7 +80,7 @@ cluster_params = ClusterParameters(
     cluster_selection_epsilon=10.0,
     circle_overlap_ratio=0.5,
     fractional_charge_threshold=0.8,
-    outlier_scale_factor=0.05
+    outlier_scale_factor=0.05,
 )
 
 pipe = Pipeline(
@@ -85,7 +94,7 @@ pipe = Pipeline(
         ClusterPhase(
             cluster_params,
             det_params,
-        )
+        ),
     ],
     [True, False],
     workspace_path,

@@ -216,7 +216,9 @@ class PointcloudLegacyPhase(PhaseLike):
 
         count = 0
 
-        msg = StatusMessage(self.name, 1, total, payload.run_number)  # We always increment by 1
+        msg = StatusMessage(
+            self.name, 1, total, payload.run_number
+        )  # We always increment by 1
 
         # Process the data
         for idx in range(min_event, max_event + 1):
@@ -304,7 +306,11 @@ class PointcloudLegacyPhase(PhaseLike):
 
         # Write beam events results to a dataframe
         df = pl.DataFrame(beam_events)
-        df.write_parquet(workspace_path / "beam_events" / f"{form_run_string(payload.run_number)}.parquet")
+        df.write_parquet(
+            workspace_path
+            / "beam_events"
+            / f"{form_run_string(payload.run_number)}.parquet"
+        )
 
         spyral_info(__name__, "Phase 1 complete")
         return result
@@ -428,7 +434,9 @@ class GetLegacyEvent:
                 self.ic_sca_trace = trace
                 self.ic_sca_trace.find_peaks(ic_params, rng, rel_height=0.5)
                 # Remove peaks outside of active time window of AT-TPC
-                self.ic_sca_trace.remove_peaks(ic_params.low_accept, ic_params.high_accept)
+                self.ic_sca_trace.remove_peaks(
+                    ic_params.low_accept, ic_params.high_accept
+                )
 
             # Extract beam downscale beam trace
             elif (
@@ -786,7 +794,7 @@ class PointCloud:
         micromegas_tb: float,
         window_tb: float,
         detector_length: float,
-        efield_correction: ElectronCorrector | None = None
+        efield_correction: ElectronCorrector | None = None,
     ):
         """Calibrate the cloud z-position from the micromegas and window time references
 
