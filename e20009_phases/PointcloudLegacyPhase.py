@@ -182,6 +182,12 @@ class PointcloudLegacyPhase(PhaseLike):
                 f"Multiple drift velocities found for run {payload.run_number}, phase 1 cannot be run!",
             )
             return PhaseResult.invalid_result(payload.run_number)
+        elif dv_df.shape[0] == 0:
+            spyral_error(
+                __name__,
+                f"No drift velocity found for run {payload.run_number}, phase 1 cannot be run!",
+            )
+            return PhaseResult.invalid_result(payload.run_number)
         mm_tb: float = dv_df.get_column("micro_mean")[0]
         w_tb: float = dv_df.get_column("wind_mean")[0]
 

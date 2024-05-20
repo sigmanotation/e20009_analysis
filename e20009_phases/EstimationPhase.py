@@ -32,7 +32,7 @@ Changes from attpc_spyral package base code (circa May 2024):
       inputs to all the functions downstream of it.
     - estimatephysics function now takes IC SCA information.
     - estimate_physics_pass function now takes IC SCA information. Removed code checking if a cluster has
-      to many beam region points.
+      too many beam region points.
 """
 
 
