@@ -2,7 +2,6 @@ from spyral.core.phase import PhaseLike, PhaseResult
 from spyral.core.status_message import StatusMessage
 from spyral.core.cluster import Cluster
 from spyral.core.spy_log import spyral_warn, spyral_error, spyral_info
-from spyral.core.run_stacks import form_run_string
 from spyral.core.track_generator import (
     generate_track_mesh,
     MeshParameters,
@@ -30,13 +29,9 @@ from numpy.random import Generator
 
 """
 Changes from attpc_spyral package base code (circa May 2024):
-    - EstimationPhase run method had small bug with nevents number being incorrect fixed; 1 was added
-      to it. Estimation results now includes IC SCA information written to the output parquet file. 
-      Including the IC SCA information means that we have to now add these parameters as
-      inputs to all the functions downstream of it.
-    - estimatephysics function now takes IC SCA information.
-    - estimate_physics_pass function now takes IC SCA information. Removed code checking if a cluster has
-      too many beam region points.
+    - InterpSolverPhase run method pulls gain-match factor for the run being analyzed from the specified file 
+      and applies it. The estimates_gated dataframe now has additinoal gates to only select events with the 
+      correct IC and IC SCA information.
 """
 
 
@@ -192,13 +187,10 @@ class InterpSolverPhase(PhaseLike):
 
         # Apply gain-matching factor to PID
         pid_vertices: list[tuple[float, float]] = list(pid.cut.get_vertices())
-        pid_vertices_matched: list[list[float, float]] = []
-        # pid_vertices_matched: list[list[float, float]] = [[point[0] / gain_factor, point[1]] for point in pid_vertices]
-        for point, coords in enumerate(pid_vertices):
-            pid_vertices_matched.append(list(coords))
-            pid_vertices_matched[point][0] /= gain_factor
+        pid_vertices_matched: list[tuple[float, float]] = [
+            (point[0] / gain_factor, point[1]) for point in pid_vertices
+        ]
         pid.cut = Cut2D(pid.cut.name, pid_vertices_matched)
-        # WORKING RIGHT HERERERERRERER
 
         # Check the cluster phase and estimate phase data
         cluster_path: Path = payload.metadata["cluster_path"]
@@ -231,6 +223,9 @@ class InterpSolverPhase(PhaseLike):
                 pl.struct(["dEdx", "brho"]).map_batches(pid.cut.is_cols_inside)
                 & (pl.col("ic_amplitude") > self.solver_params.ic_min_val)
                 & (pl.col("ic_amplitude") < self.solver_params.ic_max_val)
+                & (pl.col("ic_multiplicity") == 1.0)
+                & (pl.col("ic_sca_multiplicity") == 1.0)
+                & (abs(pl.col("ic_sca_multiplicity") - pl.col("ic_multiplicity")) <= 10)
             )
             .sort("polar", descending=True)
             .unique("event", keep="first")

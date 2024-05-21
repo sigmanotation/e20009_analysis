@@ -9,15 +9,19 @@ from spyral import (
 from e20009_phases.PointcloudLegacyPhase import PointcloudLegacyPhase
 from e20009_phases.ClusterPhase import ClusterPhase
 from e20009_phases.EstimationPhase import EstimationPhase
+from e20009_phases.InterpSolverPhase import InterpSolverPhase
 from e20009_phases.config import (
     ICParameters,
     DetectorParameters,
     PadParameters,
+    SolverParameters,
 )
 
 from pathlib import Path
 import multiprocessing
 
+#########################################################################################################
+# Create workspace
 workspace_path = Path("/Volumes/e20009/e20009_analysis")
 trace_path = Path("/Volumes/e20009/h5")
 
@@ -28,8 +32,10 @@ if not beam_events_folder.exists():
 
 run_min = 347
 run_max = 348
-n_processes = 10
+n_processes = 4
 
+#########################################################################################################
+# Define configuration
 pad_params = PadParameters(
     is_default=False,
     is_default_legacy=True,
@@ -95,6 +101,23 @@ estimate_params = EstimateParameters(
     min_total_trajectory_points=20, smoothing_factor=100.0
 )
 
+solver_params = SolverParameters(
+    gas_data_path="/Users/attpc/Desktop/e20009_analysis/e20009_analysis/e20009_parameters/e20009_target.json",
+    gain_match_factors_path="/Users/attpc/Desktop/e20009_analysis/e20009_analysis/e20009_parameters/gain_match_factors.csv",
+    particle_id_filename="/Users/attpc/Desktop/e20009_analysis/e20009_analysis/e20009_parameters/pid.json",
+    ic_min_val=450.0,
+    ic_max_val=850.0,
+    n_time_steps=1000,
+    interp_ke_min=0.1,
+    interp_ke_max=40.0,
+    interp_ke_bins=200,
+    interp_polar_min=0.1,
+    interp_polar_max=179.9,
+    interp_polar_bins=340,
+)
+
+#########################################################################################################
+# Construct pipeline
 pipe = Pipeline(
     [
         PointcloudLegacyPhase(
@@ -108,8 +131,9 @@ pipe = Pipeline(
             det_params,
         ),
         EstimationPhase(estimate_params, det_params),
+        InterpSolverPhase(solver_params, det_params),
     ],
-    [False, False, True],
+    [False, False, False, True],
     workspace_path,
     trace_path,
 )
