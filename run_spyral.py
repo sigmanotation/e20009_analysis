@@ -30,9 +30,9 @@ beam_events_folder = workspace_path / "beam_events"
 if not beam_events_folder.exists():
     beam_events_folder.mkdir()
 
-run_min = 347
-run_max = 348
-n_processes = 4
+run_min = 344
+run_max = 346
+n_processes = 3
 
 #########################################################################################################
 # Define configuration
@@ -49,7 +49,7 @@ pad_params = PadParameters(
         "/Users/attpc/Desktop/e20009_analysis/e20009_analysis/e20009_parameters/pad_electronics_legacy.csv"
     ),
     pad_scale_path=Path(
-        "/Users/attpc/Desktop/e20009_analysis/e20009_analysis/e20009_parameters/pad_electronics_legacy.csv"
+        "/Users/attpc/Desktop/e20009_analysis/e20009_analysis/e20009_parameters/pad_scale.csv"
     ),
 )
 
@@ -83,7 +83,7 @@ det_params = DetectorParameters(
     garfield_file_path=Path(
         "/Users/attpc/Desktop/e20009_analysis/e20009_analysis/e20009_parameters/e20009_efield_correction.txt"
     ),
-    do_garfield_correction=False,
+    do_garfield_correction=True,
 )
 
 cluster_params = ClusterParameters(
