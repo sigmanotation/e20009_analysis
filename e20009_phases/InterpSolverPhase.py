@@ -28,7 +28,7 @@ from multiprocessing import SimpleQueue
 from numpy.random import Generator
 
 """
-Changes from attpc_spyral package base code (circa May 2024):
+Changes from attpc_spyral package base code (circa May 22, 2024):
     - InterpSolverPhase run method pulls gain-match factor for the run being analyzed from the specified file 
       and applies it. The estimates_gated dataframe now has additinoal gates to only select events with the 
       correct IC and IC SCA information.
@@ -122,13 +122,19 @@ class InterpSolverPhase(PhaseLike):
     def construct_artifact(
         self, payload: PhaseResult, workspace_path: Path
     ) -> PhaseResult:
+        if not self.solver_params.particle_id_filename.exists():
+            spyral_warn(
+                __name__,
+                f"Particle ID {self.solver_params.particle_id_filename} does not exist, Solver will not run!",
+            )
+            return PhaseResult.invalid_result(payload.run_number)
         pid: ParticleID | None = deserialize_particle_id(
             Path(self.solver_params.particle_id_filename), self.nuclear_map
         )
         if pid is None:
             spyral_warn(
                 __name__,
-                f"Particle ID {self.solver_params.particle_id_filename} does not exist, Solver will not run!",
+                f"Particle ID {self.solver_params.particle_id_filename} is not valid, Solver will not run!",
             )
             return PhaseResult.invalid_result(payload.run_number)
         result = PhaseResult(
@@ -217,7 +223,6 @@ class InterpSolverPhase(PhaseLike):
             return PhaseResult(Path("null"), False, payload.run_number)
 
         # Select the particle group data, beam region of ic, convert to dictionary for row-wise operations
-        # Select only the largest polar angle for a given event to avoid beam-like particles
         estimates_gated = (
             estimate_df.filter(
                 pl.struct(["dEdx", "brho"]).map_batches(pid.cut.is_cols_inside)
@@ -227,8 +232,6 @@ class InterpSolverPhase(PhaseLike):
                 & (pl.col("ic_sca_multiplicity") == 1.0)
                 & (abs(pl.col("ic_sca_multiplicity") - pl.col("ic_multiplicity")) <= 10)
             )
-            .sort("polar", descending=True)
-            .unique("event", keep="first")
             .collect()
             .to_dict()
         )

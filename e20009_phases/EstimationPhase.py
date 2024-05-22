@@ -25,14 +25,13 @@ from scipy.stats import linregress
 from enum import Enum
 
 """
-Changes from attpc_spyral package base code (circa May 2024):
+Changes from attpc_spyral package base code (circa May 22, 2024):
     - EstimationPhase run method had small bug with nevents number being incorrect fixed; 1 was added
       to it. Estimation results now includes IC SCA information written to the output parquet file. 
       Including the IC SCA information means that we have to now add these parameters as
       inputs to all the functions downstream of it.
     - estimatephysics function now takes IC SCA information.
-    - estimate_physics_pass function now takes IC SCA information. Removed code checking if a cluster has
-      too many beam region points.
+    - estimate_physics_pass function now takes IC SCA information.
 """
 
 
@@ -123,7 +122,7 @@ class EstimationPhase(PhaseLike):
             flush_val = 0
         else:
             flush_percent = 0.01
-            flush_val = int(flush_percent * (max_event - min_event + 1))
+            flush_val = int(flush_percent * nevents)
             total = 100
 
         count = 0
@@ -365,18 +364,6 @@ def estimate_physics_pass(
         estimates the direction.
 
     """
-    # # Do some cleanup, reject clusters which have too many beam region points
-    # beam_region_fraction = float(
-    #     len(
-    #         cluster.data[
-    #             np.linalg.norm(cluster.data[:, :2], axis=1)
-    #             < detector_params.beam_region_radius
-    #         ]
-    #     )
-    # ) / float(len(cluster.data))
-    # if beam_region_fraction > 0.9:
-    #     return (False, Direction.NONE)
-
     direction = chosen_direction
     vertex = np.array([0.0, 0.0, 0.0])  # reaction vertex
     center = np.array([0.0, 0.0, 0.0])  # spiral center

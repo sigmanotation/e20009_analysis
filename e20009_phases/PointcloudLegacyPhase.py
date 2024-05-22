@@ -42,7 +42,7 @@ from multiprocessing import SimpleQueue
 from contourpy import contour_generator
 
 """
-Changes from attpc_spyral package base code (circa May 2024):
+Changes from attpc_spyral package base code (circa May 22, 2024):
     - PointcloudLegacyPhase takes modified config classes found in the config.py file. These include
       the ICParameters class (called FRIBParameters in the attpc_spyral package) and modified 
       DetectorParameters and PadParameters. See that file for more information on their attributes.
@@ -220,7 +220,7 @@ class PointcloudLegacyPhase(PhaseLike):
             flush_val = 0
         else:
             flush_percent = 0.01
-            flush_val = int(flush_percent * (max_event - min_event + 1))
+            flush_val = int(flush_percent * nevents)
             total = 100
 
         count = 0
