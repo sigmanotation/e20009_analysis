@@ -14,6 +14,8 @@ from spyral.core.constants import (
     INVALID_PAD_ID,
     NUMBER_OF_TIME_BUCKETS,
 )
+from spyral.core.hardware_id import HardwareID
+from spyral.core.hardware_id import hardware_id_from_array
 from spyral.core.pad_map import PadMap
 from spyral.trace.get_legacy_event import (
     preprocess_traces,
@@ -22,10 +24,10 @@ from spyral.trace.get_legacy_event import (
 )
 from spyral.trace.get_event import GetEvent
 from spyral.trace.peak import Peak
-from spyral.core.hardware_id import HardwareID
-from spyral.core.point_cloud import PointCloud
+from spyral.interpolate import BilinearInterpolator
 from spyral.phases.schema import TRACE_SCHEMA, POINTCLOUD_SCHEMA
-from spyral.core.hardware_id import hardware_id_from_array
+from spyral.phases.pointcloud_legacy_phase import get_event_range
+from spyral.correction.generate import interpolate_initial_rho
 
 # Import e20009 specific data classes
 from e20009_phases.config import ICParameters, DetectorParameters, PadParameters
@@ -37,25 +39,31 @@ import polars as pl
 from scipy import signal
 from pathlib import Path
 from multiprocessing import SimpleQueue
+from contourpy import contour_generator
 
-
-def get_event_range(trace_file: h5.File) -> tuple[int, int]:
-    """
-    The merger doesn't use attributes for legacy reasons, so everything is stored in datasets. Use this to retrieve the min and max event numbers.
-
-    Parameters
-    ----------
-    trace_file: h5py.File
-        File handle to a hdf5 file with AT-TPC traces
-
-    Returns
-    -------
-    tuple[int, int]
-        A pair of integers (first event number, last event number)
-    """
-    meta_group = trace_file.get("meta")
-    meta_data = meta_group.get("meta")  # type: ignore
-    return (int(meta_data[0]), int(meta_data[2]))  # type: ignore
+"""
+Changes from attpc_spyral package base code (circa May 22, 2024):
+    - PointcloudLegacyPhase takes modified config classes found in the config.py file. These include
+      the ICParameters class (called FRIBParameters in the attpc_spyral package) and modified 
+      DetectorParameters and PadParameters. See that file for more information on their attributes.
+    - PointcloudLegacyPhase create_assets method had an error where the first two arguments passed to
+      generate_electron_correction were switched.
+    - generate_electron_correction uses the average window and micromegas time buckets calculated from 
+      all runs in the drift velocity file.
+    - PointcloudLegacyPhase run method now takes the window and micromegas time buckets to calculate
+      the drift velocity from the indicated file in DetectorParameters. It adds IC SCA information as
+      attributes to the output HDF5 file. It also writes information related to the IC and IC SCA traces
+      to a parquet file in the workspace. Fixed small bug with nevents number being incorrect; 1 was added
+      to it.
+    - GetLegacyEvent load_traces method extracts IC SCA and downscale beam traces. It also removes traces
+      that have 10 or more points.
+    - GetTrace find_peaks method takes a new parameter called min_width. The floor is now taken for both 
+      inflection points.
+    - GetTrace has a new method called remove_peaks.
+    - PointCloud load_cloud_from_get_event method does not pull a pad gain value from a value to multiply
+      a point's integral by.
+    - PointCloud calibrate_z_position method does not take ic_correction as a parameter.
+"""
 
 
 class PointcloudLegacyPhase(PhaseLike):
@@ -70,8 +78,8 @@ class PointcloudLegacyPhase(PhaseLike):
     ----------
     get_params: GetParameters
         Parameters controlling the GET-DAQ signal analysis
-    frib_params: FribParameters
-        Parameters repurposed in legacy to analyze auxilary detectors (IC, Si, etc)
+    ic_params: ICParameters
+        Parameters related to the IC and CoBo 10
     detector_params: DetectorParameters
         Parameters describing the detector
     pad_params: PadParameters
@@ -81,8 +89,8 @@ class PointcloudLegacyPhase(PhaseLike):
     ----------
     get_params: GetParameters
         Parameters controlling the GET-DAQ signal analysis
-    frib_params: FribParameters
-        Parameters repurposed in legacy to analyze auxilary detectors (IC, Si, etc)
+    ic_params: ICParameters
+        Parameters related to the IC and CoBo 10
     det_params: DetectorParameters
         Parameters describing the detector
     pad_map: PadMap
@@ -117,8 +125,8 @@ class PointcloudLegacyPhase(PhaseLike):
             and self.det_params.do_garfield_correction
         ):
             generate_electron_correction(
-                self.electron_correction_path,
                 garf_path,
+                self.electron_correction_path,
                 self.det_params,
             )
         return True
@@ -181,6 +189,12 @@ class PointcloudLegacyPhase(PhaseLike):
                 f"Multiple drift velocities found for run {payload.run_number}, phase 1 cannot be run!",
             )
             return PhaseResult.invalid_result(payload.run_number)
+        elif dv_df.shape[0] == 0:
+            spyral_error(
+                __name__,
+                f"No drift velocity found for run {payload.run_number}, phase 1 cannot be run!",
+            )
+            return PhaseResult.invalid_result(payload.run_number)
         mm_tb: float = dv_df.get_column("micro_mean")[0]
         w_tb: float = dv_df.get_column("wind_mean")[0]
 
@@ -206,17 +220,17 @@ class PointcloudLegacyPhase(PhaseLike):
             flush_val = 0
         else:
             flush_percent = 0.01
-            flush_val = int(flush_percent * (max_event - min_event))
+            flush_val = int(flush_percent * nevents)
             total = 100
 
         count = 0
 
-        msg = StatusMessage(self.name, 1, total, 1)  # We always increment by 1
+        msg = StatusMessage(
+            self.name, 1, total, payload.run_number
+        )  # We always increment by 1
 
         # Process the data
         for idx in range(min_event, max_event + 1):
-            if count==100:
-                break
             count += 1
             if count > flush_val:
                 count = 0
@@ -301,7 +315,11 @@ class PointcloudLegacyPhase(PhaseLike):
 
         # Write beam events results to a dataframe
         df = pl.DataFrame(beam_events)
-        df.write_parquet(workspace_path / "beam_events" / f"{form_run_string(payload.run_number)}.parquet")
+        df.write_parquet(
+            workspace_path
+            / "beam_events"
+            / f"{form_run_string(payload.run_number)}.parquet"
+        )
 
         spyral_info(__name__, "Phase 1 complete")
         return result
@@ -322,8 +340,8 @@ class GetLegacyEvent:
         The event number
     get_params: GetParameters
         Configuration parameters controlling the GET signal analysis
-    ic_params: FribParameters
-        Configuration parameters controlling the ion chamber signal analysis
+    ic_params: ICParameters
+        Configuration parameters related to the IC and CoBo 10
     rng: numpy.random.Generator
         A random number generator for use in the signal analysis
 
@@ -331,8 +349,12 @@ class GetLegacyEvent:
     ----------
     traces: list[GetTrace]
         The pad plane traces from the event
-    external_traces: list[GetTrace]
-        Traces from external (non-pad plane) sources
+    ic_trace: GetTrace | None
+        Trace of IC signal
+    ic_sca_trace: GetTrace | None
+        Trace of IC SCA signal
+    beam_ds_trace: GetTrace | None
+        Trace of downscale beam signal
     name: str
         The event name
     number:
@@ -382,8 +404,8 @@ class GetLegacyEvent:
             The event number
         get_params: GetParameters
             Configuration parameters controlling the GET signal analysis
-        ic_params: FribParameters
-            Configuration parameters controlling the ion chamber signal analysis
+        ic_params: ICParameters
+            Configuration parameters related to the IC and CoBo 10
         rng: numpy.random.Generator
             A random number generator for use in the signal analysis
         """
@@ -410,7 +432,7 @@ class GetLegacyEvent:
                 self.ic_trace = trace
                 self.ic_trace.find_peaks(ic_params, rng, rel_height=0.5, min_width=4.0)  # type: ignore
                 # Remove peaks outside of active time window of AT-TPC
-                self.ic_trace.remove_peaks(60, 411)
+                self.ic_trace.remove_peaks(ic_params.low_accept, ic_params.high_accept)
 
             # Extract IC SCA
             elif (
@@ -421,7 +443,9 @@ class GetLegacyEvent:
                 self.ic_sca_trace = trace
                 self.ic_sca_trace.find_peaks(ic_params, rng, rel_height=0.5)
                 # Remove peaks outside of active time window of AT-TPC
-                self.ic_sca_trace.remove_peaks(60, 411)
+                self.ic_sca_trace.remove_peaks(
+                    ic_params.low_accept, ic_params.high_accept
+                )
 
             # Extract beam downscale beam trace
             elif (
@@ -478,12 +502,14 @@ class GetTrace:
         Check if the trace is valid
     get_pad_id() -> int
         Get the pad id for this trace
-    find_peaks(params: GetParameters, rng: numpy.random.Generator, rel_height: float)
+    find_peaks(params: GetParameters, rng: numpy.random.Generator, rel_height: float, min_width: float)
         Find the peaks in the trace
     get_number_of_peaks() -> int
         Get the number of peaks found in the trace
     get_peaks(params: GetParameters) -> list[Peak]
         Get the peaks found in the trace
+    remove_peaks(low_cut: int, high_cut: int) -> list[Peak]
+        Remove peaks above and below the indicated cuts
     """
 
     def __init__(
@@ -626,7 +652,7 @@ class GetTrace:
         """
         return self.peaks
 
-    def remove_peaks(self, low_cut: int, high_cut: int):
+    def remove_peaks(self, low_cut: int, high_cut: int) -> list[Peak]:
         """Remove all peaks below and above the indicated cutoffs.
 
         Parameters
@@ -667,7 +693,7 @@ class PointCloud:
         Check if the point cloud is valid
     retrieve_spatial_coordinates() -> ndarray
         Get the positional data from the point cloud
-    calibrate_z_position(micromegas_tb: float, window_tb: float, detector_length: float, ic_correction: float = 0.0)
+    calibrate_z_position(micromegas_tb: float, window_tb: float, detector_length: float)
         Calibrate the cloud z-position from the micromegas and window time references
     remove_illegal_points(detector_length: float)
         Remove any points which lie outside the legal detector bounds in z
@@ -778,7 +804,6 @@ class PointCloud:
         window_tb: float,
         detector_length: float,
         efield_correction: ElectronCorrector | None = None,
-        ic_correction: float = 0.0,
     ):
         """Calibrate the cloud z-position from the micromegas and window time references
 
@@ -795,8 +820,6 @@ class PointCloud:
             The detector length in mm
         efield_correction: ElectronCorrector | None
             The optional Garfield electric field correction to the electron drift
-        ic_correction: float
-            The ion chamber time correction in GET Time Buckets
         """
         # Maybe use mm as the reference because it is more stable?
         for idx, point in enumerate(self.cloud):
@@ -825,3 +848,105 @@ class PointCloud:
         """Sort the internal point cloud array by the z-coordinate"""
         indicies = np.argsort(self.cloud[:, 2])
         self.cloud = self.cloud[indicies]
+
+
+def generate_electron_correction(
+    garf_file_path: Path, output_path: Path, params: DetectorParameters
+):
+    """Generate the grid for the correction to electrons drifting the AT-TPC field
+
+    Need to convert garfield correction data into regularly spaced interpolation scheme
+    over rho and z with the correct units
+
+    Garfield data format:
+    [x_initial, y_initial, x_final, y_final, z_final, time] all in cm
+    x=z, y=rho, x=transverse
+
+    Parameters
+    ----------
+    garf_file_path: pathlib.Path
+        Path to a file containing the data generated by Garfield
+    output_path: pathlib.Path
+        Path to a numpy file for the interpolation grid to be saved to
+    params: DetectorParameters
+        Configuration parameters for physical detector properties
+    """
+
+    # Use average window and micromegas time buckets from all runs in the drift velocity file
+    dv_df: pl.DataFrame = pl.read_csv(params.drift_velocity_path)
+    w_tb = int(dv_df.select(pl.mean("wind_mean"))[0, 0])
+    mm_tb = int(dv_df.select(pl.mean("micro_mean"))[0, 0])
+
+    garfield_data: np.ndarray = np.loadtxt(garf_file_path, dtype=float)
+
+    chunk_size = 55  # garfield data in 55 row chunks (steps in rho)
+    chunk_midpoint_index = 27  # index of the chunk midpoint
+    n_chunks = int(len(garfield_data) / chunk_size)  # number of chunks (steps in z)
+
+    z_steps = np.linspace(30.0, 1000.0, 98)
+    gz_min = 30.0
+    gz_max = 1000.0
+    gz_bins = 98
+    rho_steps = np.linspace(-270.0, 270.0, 55)
+    grho_min = -270.0
+    grho_max = 270.0
+    grho_bins = 55
+
+    rho_garf_points, z_garf_points = np.meshgrid(rho_steps, z_steps)
+
+    rho_final: np.ndarray = np.zeros((n_chunks, chunk_size))
+    misc_final: np.ndarray = np.zeros((n_chunks, chunk_size, 3))
+    for chunk in range(n_chunks):
+        for row in range(chunk_size):
+            # Convert distances to mm
+            misc_final[chunk, row, 0] = (
+                garfield_data[chunk * chunk_size + row, 2] * 10.0
+            )  # z
+            rho_final[chunk, row] = (
+                garfield_data[chunk * chunk_size + row, 3] * 10.0
+            )  # radial
+            misc_final[chunk, row, 1] = (
+                garfield_data[chunk * chunk_size + row, 4] * 10.0
+            )  # transverse
+            # Time in nanoseconds
+            misc_final[chunk, row, 2] = garfield_data[
+                chunk * chunk_size + row, 5
+            ]  # time/z initial
+
+    # Correct the time for the midpoint and convert to mm
+    for chunk in misc_final:
+        mid_val = chunk[chunk_midpoint_index, 2]
+        chunk[:, 2] -= mid_val
+        chunk[:, 2] *= (
+            params.detector_length / (w_tb - mm_tb) * params.get_frequency * 0.001
+        )
+
+    interp = BilinearInterpolator(
+        gz_min, gz_max, gz_bins, grho_min, grho_max, grho_bins, misc_final
+    )
+    contour = contour_generator(z_garf_points, rho_garf_points, rho_final)
+
+    rho_bin_min = 0.0
+    rho_bin_max = 275.0
+    rho_bins = 276
+
+    z_bin_min = 0.0
+    z_bin_max = 1000.0
+    z_bins = 1001
+
+    rho_points = np.linspace(rho_bin_min, rho_bin_max, rho_bins)
+    z_points = np.linspace(z_bin_min, z_bin_max, z_bins)
+
+    correction_grid = np.zeros((276, 1001, 3))
+
+    for ridx, r in enumerate(rho_points):
+        for zidx, z in enumerate(z_points):
+            # rescale z to garfield
+            zg = (1.0 - z * 0.001) * 970.0 + 30.0  # Garfield first point is at 30.0 mm
+            rho_cor = interpolate_initial_rho(contour, z, r) - r
+            correction_grid[ridx, zidx, 0] = rho_cor
+            others = interp.interpolate(zg, rho_cor)
+            correction_grid[ridx, zidx, 1] = others[1]
+            correction_grid[ridx, zidx, 2] = others[2]
+
+    np.save(output_path, correction_grid)

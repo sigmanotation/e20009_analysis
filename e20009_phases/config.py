@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-
-INVALID_PATH: Path = Path("IllegalPath")
+from spyral import INVALID_PATH
 
 
 @dataclass
@@ -20,6 +19,10 @@ class ICParameters:
         The maximum peak width parameter used in scipy.signal.find_peaks
     peak_threshold: float
         The minimum amplitude of a valid peak
+    low_accept: int
+        Minimum centroid value of a peak to be considered valid.
+    high_accept: int
+        Maximum centroid value of a peak to be considered valid.
     """
 
     baseline_window_scale: float
@@ -27,6 +30,8 @@ class ICParameters:
     peak_prominence: float
     peak_max_width: float
     peak_threshold: float
+    low_accept: int
+    high_accept: int
 
 
 @dataclass
@@ -41,6 +46,8 @@ class DetectorParameters:
         The magnitude of the electric field in V/m
     detector_length: float
         The detector length in mm
+    beam_region_radius: float
+        The beam region radius in mm
     drift_velocity_path: str
         Path to file containing window and micromegas edges in time buckets
         for each run to be analyzed.
@@ -54,6 +61,7 @@ class DetectorParameters:
     magnetic_field: float  # Tesla
     electric_field: float  # V/m
     detector_length: float  # mm
+    beam_region_radius: float  # mm
     drift_velocity_path: Path
     get_frequency: float  # MHz
     garfield_file_path: Path
@@ -80,3 +88,50 @@ class PadParameters:
     pad_time_path: Path
     pad_electronics_path: Path
     pad_scale_path: Path
+
+
+@dataclass
+class SolverParameters:
+    """Parameters for physics solving
+
+    Attributes
+    ----------
+    gas_data_path: Path
+        Path to a spyral-utils GasTarget file
+    gain_match_factors_path: Path
+        Path to CSV file containing gain match factors to normalize PID for each run
+        to chosen subrange of runs.
+    particle_id_filename: Path
+        Name of a particle ID cut file
+    ic_min_val: float
+        Low value the desired beam region of the ion chamber spectrum
+    ic_max_value: float
+        High value the desired beam region of the ion chamber spectrum
+    n_time_steps: int
+        The number of timesteps used in the ODE solver
+    interp_ke_min: float
+        The minimum value of kinetic energy used in the interpolation scheme in MeV
+    interp_ke_max: float
+        The maximum value of kinetic energy used in the interpolation scheme in MeV
+    interp_ke_bins: int
+        The number of kinetic energy bins used in the interpolation scheme
+    interp_polar_min: float
+        The minimum value of polar angle used in the interpolation scheme in degrees
+    interp_polar_max: float
+        The maximum value of polar angle used in the interpolation scheme in degrees
+    interp_polar_bins: int
+        The number of polar angle bins used in the interpolation scheme
+    """
+
+    gas_data_path: Path
+    gain_match_factors_path: Path
+    particle_id_filename: Path
+    ic_min_val: float
+    ic_max_val: float
+    n_time_steps: int
+    interp_ke_min: float
+    interp_ke_max: float
+    interp_ke_bins: int
+    interp_polar_min: float
+    interp_polar_max: float
+    interp_polar_bins: int
