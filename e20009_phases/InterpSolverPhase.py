@@ -31,7 +31,7 @@ from numpy.random import Generator
 Changes from attpc_spyral package base code (circa May 22, 2024):
     - InterpSolverPhase run method pulls gain-match factor for the run being analyzed from the specified file 
       and applies it. The estimates_gated dataframe now has additinoal gates to only select events with the 
-      correct IC and IC SCA information.
+      correct IC and IC SCA information. StatusMessage now takes self.name as first argument instead of "Interp. Solver".
 """
 
 
@@ -256,7 +256,7 @@ class InterpSolverPhase(PhaseLike):
         count = 0
 
         msg = StatusMessage(
-            "Interp. Solver", 1, total, payload.run_number
+            self.name, 1, total, payload.run_number
         )  # We always increment by 1
 
         # Result storage
