@@ -5,7 +5,7 @@ from spyral import INVALID_PATH
 
 @dataclass
 class ICParameters:
-    """Parameters for FRIBDAQ (IC, Si, etc) trace signal analysis
+    """Parameters for IC trace signal analysis. Also includes downscale beam trace
 
     Attributes
     ----------
