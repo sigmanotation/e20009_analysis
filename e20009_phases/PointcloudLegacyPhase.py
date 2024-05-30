@@ -195,8 +195,8 @@ class PointcloudLegacyPhase(PhaseLike):
                 f"No drift velocity found for run {payload.run_number}, phase 1 cannot be run!",
             )
             return PhaseResult.invalid_result(payload.run_number)
-        mm_tb: float = dv_df.get_column("micro_mean")[0]
-        w_tb: float = dv_df.get_column("wind_mean")[0]
+        mm_tb: float = dv_df.get_column("average_micromegas_tb")[0]
+        w_tb: float = dv_df.get_column("average_window_tb")[0]
 
         # Beam event results
         beam_events: dict[str, list] = {
@@ -874,8 +874,8 @@ def generate_electron_correction(
 
     # Use average window and micromegas time buckets from all runs in the drift velocity file
     dv_df: pl.DataFrame = pl.read_csv(params.drift_velocity_path)
-    w_tb = int(dv_df.select(pl.mean("wind_mean"))[0, 0])
-    mm_tb = int(dv_df.select(pl.mean("micro_mean"))[0, 0])
+    w_tb = int(dv_df.select(pl.mean("average_window_tb"))[0, 0])
+    mm_tb = int(dv_df.select(pl.mean("average_micromegas_tb"))[0, 0])
 
     garfield_data: np.ndarray = np.loadtxt(garf_file_path, dtype=float)
 
