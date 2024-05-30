@@ -46,8 +46,6 @@ Changes from attpc_spyral package base code (circa May 22, 2024):
     - PointcloudLegacyPhase takes modified config classes found in the config.py file. These include
       the ICParameters class (called FRIBParameters in the attpc_spyral package) and modified 
       DetectorParameters and PadParameters. See that file for more information on their attributes.
-    - PointcloudLegacyPhase create_assets method had an error where the first two arguments passed to
-      generate_electron_correction were switched.
     - generate_electron_correction uses the average window and micromegas time buckets calculated from 
       all runs in the drift velocity file.
     - PointcloudLegacyPhase run method now takes the window and micromegas time buckets to calculate
@@ -59,7 +57,8 @@ Changes from attpc_spyral package base code (circa May 22, 2024):
       that have 10 or more points.
     - GetTrace find_peaks method takes a new parameter called min_width. The floor is now taken for both 
       inflection points.
-    - GetTrace has a new method called remove_peaks.
+    - GetTrace has a new method called remove_peaks to remove invalid IC and IC SCA peaks. It is used in
+      the PointcloudLegacyPhase run method.
     - PointCloud load_cloud_from_get_event method does not pull a pad gain value from a value to multiply
       a point's integral by.
     - PointCloud calibrate_z_position method does not take ic_correction as a parameter.
