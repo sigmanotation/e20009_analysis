@@ -80,6 +80,8 @@ class PadParameters:
         Path to the csv file containing the pad time corrections
     pad_electronics_path: Path
         Path to the csv file containing the pad electronics ids
+    pad_scale_path: Path
+        Path to file that tells whether a pad is big or small
     """
 
     is_default: bool

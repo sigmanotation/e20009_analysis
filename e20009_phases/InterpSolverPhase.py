@@ -28,7 +28,7 @@ from multiprocessing import SimpleQueue
 from numpy.random import Generator
 
 """
-Changes from attpc_spyral package base code (circa May 22, 2024):
+Changes from attpc_spyral package base code (circa June 1, 2024):
     - InterpSolverPhase run method pulls gain-match factor for the run being analyzed from the specified file 
       and applies it. The estimates_gated dataframe now has additinoal gates to only select events with the 
       correct IC and IC SCA information. StatusMessage now takes self.name as first argument instead of "Interp. Solver".
@@ -128,6 +128,7 @@ class InterpSolverPhase(PhaseLike):
                 f"Particle ID {self.solver_params.particle_id_filename} does not exist, Solver will not run!",
             )
             return PhaseResult.invalid_result(payload.run_number)
+        
         pid: ParticleID | None = deserialize_particle_id(
             Path(self.solver_params.particle_id_filename), self.nuclear_map
         )
@@ -137,6 +138,7 @@ class InterpSolverPhase(PhaseLike):
                 f"Particle ID {self.solver_params.particle_id_filename} is not valid, Solver will not run!",
             )
             return PhaseResult.invalid_result(payload.run_number)
+        
         result = PhaseResult(
             artifact_path=self.get_artifact_path(workspace_path)
             / form_physics_file_name(payload.run_number, pid),

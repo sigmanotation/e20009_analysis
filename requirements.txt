@@ -1,4 +1,4 @@
-attpc_spyral==0.7.0
+attpc_spyral==0.8.0
 ipywidgets==8.1.2
 jupyterlab==4.1.6
 ipympl==0.9.3
