@@ -119,7 +119,7 @@ target = GasTarget(
     TargetData(compound=[(1, 2, 2)], pressure=600.0, thickness=None), nuclear_map
 )
 
-nevents = 10000
+nevents = 500000
 
 # At least 2.22 MeV is needed to break up the deuteron.
 pipeline = KinematicsPipeline(
@@ -166,12 +166,12 @@ writer = SpyralWriter_e20009(det_path, config)
 
 #############################################################################################
 def main():
-    run_kinematics_pipeline(pipeline, nevents, kine_path)
-    # run_simulation(
-    #     config,
-    #     kine_path,
-    #     writer,
-    # )
+    # run_kinematics_pipeline(pipeline, nevents, kine_path)
+    run_simulation(
+        config,
+        kine_path,
+        writer,
+    )
 
     # reaction = {
     #     "beam": nuclear_map.get_data(4, 10),

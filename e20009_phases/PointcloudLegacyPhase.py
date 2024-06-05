@@ -53,14 +53,12 @@ Changes from attpc_spyral package base code (circa June 1, 2024):
       attributes to the output HDF5 file. It also writes information related to the IC and IC SCA traces
       to a parquet file in the workspace. Fixed small bug with nevents number being incorrect; 1 was added
       to it.
-    - GetLegacyEvent load_traces method extracts IC SCA and downscale beam traces. It also removes traces
-      that have 10 or more points.
+    - GetLegacyEvent load_traces method extracts IC SCA and downscale beam traces.
     - GetTrace find_peaks method takes a new parameter called min_width. The floor is now taken for both 
       inflection points.
     - GetTrace has a new method called remove_peaks to remove invalid IC and IC SCA peaks. It is used in
       the PointcloudLegacyPhase run method.
-    - PointCloud load_cloud_from_get_event method does not pull a pad gain value from a value to multiply
-      a point's integral by.
+    - PointCloud does not accept traces that have 10 or more peaks (points).
     - PointCloud calibrate_z_position method does not take ic_correction as a parameter.
 """
 
@@ -455,12 +453,8 @@ class GetLegacyEvent:
                 self.beam_ds_trace = trace
                 self.beam_ds_trace.find_peaks(ic_params, rng, rel_height=0.8)
 
-        # Remove CoBo 10 from our normal traces along with any other traces with 10 or more points
-        self.traces = [
-            trace
-            for trace in self.traces
-            if (trace.hw_id.cobo_id != 10) and (trace.get_number_of_peaks() < 10)
-        ]
+        # Remove CoBo 10 from our normal traces
+        self.traces = [trace for trace in self.traces if trace.hw_id.cobo_id != 10]
 
     def is_valid(self) -> bool:
         return self.name != INVALID_EVENT_NAME and self.number != INVALID_EVENT_NUMBER
@@ -728,7 +722,8 @@ class PointCloud:
         self.cloud = np.zeros((count, 8))
         idx = 0
         for trace in event.traces:
-            if trace.get_number_of_peaks() == 0 or trace.get_number_of_peaks() > 5:
+            # Skip traces with no peaks and those with 10 or more peaks
+            if trace.get_number_of_peaks() == 0 or trace.get_number_of_peaks() >= 10:
                 continue
 
             pid = trace.hw_id.pad_id
@@ -806,7 +801,7 @@ class PointCloud:
     ):
         """Calibrate the cloud z-position from the micromegas and window time references
 
-        Also applies the ion chamber time correction and electric field correction if given
+        Also applies the electric field correction if given
         Trims any points beyond the bounds of the detector (0 to detector length)
 
         Parameters
