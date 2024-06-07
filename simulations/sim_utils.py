@@ -163,24 +163,3 @@ def max_reaction_excitation_energy(reaction: dict[str:NucleusData], beam_energy:
     ex = (-b + np.sqrt(b**2 - 4 * a * c)) / 2 / a
 
     return ex
-
-
-def state_shape(points, Ei, gamma):
-    """
-    Probabilty density function of finding a decaying quantum mechanical state in final state of
-    an energy E, P(E). This gives the theoretical shape of a state as a function of energy.
-    """
-    prob = []
-    for point in points:
-        value: float = 1 / ((point - Ei) ** 2 + gamma**2 / 4)
-        prob.append(value)
-
-    return prob
-
-
-def detector_response():
-    """
-    Calculates the detector response by convolving the simulated response of a delta function
-    state with the theoretically expected shape of a
-    """
-    pass
