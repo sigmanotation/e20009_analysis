@@ -27,9 +27,8 @@ def breit_wigner_shape(points: np.ndarray, Ei: float, gamma: float):
 
 def exp_line(points, Ei, gamma, a):
     bw = breit_wigner_shape(points, Ei, gamma)
-    dr = detector_response(points)
-    y = fftconvolve(bw, dr, mode="full", axes=0)
-
+    dr = detector_responsenew(points)
+    y = fftconvolve(dr, bw, mode="full", axes=0)
     return a * y[: len(points)]
 
 
@@ -44,6 +43,18 @@ def detector_response(points):
         value: float = math.exp(-(point**2) / 0.2)
         y.append(value)
 
+    return np.array(y)
+
+
+def detector_responsenew(points):
+    """ """
+    # sig = 0.01572716
+    sig = 0.18
+    mu = 0
+    # a = 1
+    npoints = shift_to_center(points)
+    y = np.array([sig / ((point - mu) ** 2 + sig**2) / np.pi for point in points])
+
     return y
 
 
@@ -54,3 +65,7 @@ def shift_to_center(array: np.ndarray):
     array = array - center
 
     return array
+
+
+def sqrtfit(x, A, c, p, off):
+    return A * (x + c) ** p + off
