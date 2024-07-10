@@ -10,8 +10,8 @@ import numpy as np
 
 class SpyralWriter_e20009:
     """
-    Custom writer for e20009 to ensure compliance with its analysis. Writes the
-    simulated data into multiple files to take advantage of Spyral multiprocessing.
+    Writer for Spyral e20009 analysis. Writes the simulated data into multiple
+    files to take advantage of Spyral's multiprocessing.
 
     Parameters
     ----------
@@ -20,12 +20,12 @@ class SpyralWriter_e20009:
     config: Config
         The simulation configuration.
     max_file_size: int
-        The maximum file size of a point cloud file in bytes. Defualt values is 10 Gb.
+        The maximum file size of a point cloud file in bytes. Defualt value is 10 Gb.
 
     Attributes
     ----------
     response: np.ndarray
-        Array of response of GET electronics.
+        Response of GET electronics.
     run_number: int
         Run number of current point cloud file being written to.
     file_path: Path
@@ -46,14 +46,20 @@ class SpyralWriter_e20009:
         Not currently used, but required to have this method.
     get_filename() -> Path
         Returns directory that point cloud files are written to.
+    close() -> None
+        Closes the writer and ensures the current point cloud file being
+        written to has the first and last written events as attributes.
     """
 
-    def __init__(self, directory_path: Path, config: Config, max_file_size: int = 10e9):
-        self.directory_path = directory_path
-        self.response = get_response(config).copy()
-        self.max_file_size = max_file_size
+    def __init__(
+        self, directory_path: Path, config: Config, max_file_size: int = int(5e9)
+    ):
+        self.directory_path: Path = directory_path
+        self.response: np.ndarray = get_response(config).copy()
+        self.max_file_size: int = max_file_size
         self.run_number = 0
         self.event_number_low = 0  # Kinematics generator always starts with event 0
+        self.event_number_high = 0  # By default set to 0
         self.create_file()
 
     def create_file(self) -> None:
@@ -61,10 +67,10 @@ class SpyralWriter_e20009:
         Creates a new point cloud file.
         """
         self.run_number += 1
-        path = self.directory_path / f"run_{self.run_number:04d}.h5"
-        self.file_path = path
+        path: Path = self.directory_path / f"run_{self.run_number:04d}.h5"
+        self.file_path: Path = path
         self.file = h5.File(path, "w")
-        self.cloud_group = self.file.create_group("cloud")
+        self.cloud_group: h5.Group = self.file.create_group("cloud")
 
     def write(self, data: np.ndarray, config: Config, event_number: int) -> None:
         """
@@ -80,6 +86,12 @@ class SpyralWriter_e20009:
         event_number: int
             Event number of simulated event from the kinematics file.
         """
+        # If current file is too large, make a new one
+        if self.file_path.stat().st_size >= self.max_file_size:
+            self.set_number_of_events()
+            self.file.close()
+            self.create_file()
+
         if config.pad_centers is None:
             raise ValueError("Pad centers are not assigned at write!")
         spyral_format = convert_to_spyral(
@@ -97,11 +109,6 @@ class SpyralWriter_e20009:
         dset = self.cloud_group.create_dataset(
             f"cloud_{event_number}", data=spyral_format
         )
-
-        # If current file is too large, make a new one
-        if self.file_path.stat().st_size > self.max_file_size:
-            self.set_number_of_events()
-            self.create_file()
 
         # No ic stuff from simulation
         dset.attrs["ic_amplitude"] = -1.0
@@ -127,6 +134,14 @@ class SpyralWriter_e20009:
         Returns directory that point cloud files are written to.
         """
         return self.directory_path
+
+    def close(self) -> None:
+        """
+        Closes the writer and ensures the current point cloud file being
+        written to has the first and last written events as attributes.
+        """
+        self.set_number_of_events()
+        self.file.close()
 
 
 # Used to determine the maximum energy for ExcitationUniform
