@@ -21,11 +21,13 @@ from pathlib import Path
 import multiprocessing
 
 #########################################################################################################
-# Create workspace
-workspace_path = Path("C:\\Users\\zachs\\Desktop\\wkspc")
+# Set up workspace and trace paths
+workspace_path = Path("D:\\test")
 trace_path = Path("D:\\h5")
 
 # Make directory to store beam events
+if not workspace_path.exists():
+    workspace_path.mkdir()
 beam_events_folder = workspace_path / "beam_events"
 if not beam_events_folder.exists():
     beam_events_folder.mkdir()
