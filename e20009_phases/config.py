@@ -69,30 +69,6 @@ class DetectorParameters:
 
 
 @dataclass
-class PadParameters:
-    """Parameters describing the pad map paths
-
-    Attributes
-    ----------
-    pad_geometry_path: Path
-        Path to the csv file containing the pad geometry
-    pad_time_path: Path
-        Path to the csv file containing the pad time corrections
-    pad_electronics_path: Path
-        Path to the csv file containing the pad electronics ids
-    pad_scale_path: Path
-        Path to file that tells whether a pad is big or small
-    """
-
-    is_default: bool
-    is_default_legacy: bool
-    pad_geometry_path: Path
-    pad_time_path: Path
-    pad_electronics_path: Path
-    pad_scale_path: Path
-
-
-@dataclass
 class SolverParameters:
     """Parameters for physics solving
 

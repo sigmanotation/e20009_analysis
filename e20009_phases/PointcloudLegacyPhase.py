@@ -723,7 +723,9 @@ class PointCloud:
         idx = 0
         for trace in event.traces:
             # Skip traces with no peaks and those with 10 or more peaks
-            if trace.get_number_of_peaks() == 0 or trace.get_number_of_peaks() >= 10:
+            if (
+                trace.get_number_of_peaks() == 0
+            ):  # or trace.get_number_of_peaks() >= 10:
                 continue
 
             pid = trace.hw_id.pad_id
