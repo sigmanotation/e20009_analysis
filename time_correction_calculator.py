@@ -9,13 +9,12 @@ import h5py as h5
 NUM_CHANNELS = 10240
 
 # Configuration parameters
-workspace_path = Path("/Volumes/e20009/test_pulser")
-trace_path = Path("/Volumes/e20009/pulser_h5")
-run_min = 378
-run_max = 378
+workspace_path = Path("D:\\test_pulser")
+trace_path = Path("D:\\pulser_h5")
+run = 378
 
 
-def tc_calculator(workspace_path: Path, traces_path: Path, run_min: int, run_max: int):
+def tc_calculator(workspace_path: Path, traces_path: Path, run: int):
     """
     Calculates the micromegas and window time buckets of beam events in a run to find its drift velocity using downscale beam events.
     The error of both these edges is found as well. The results are output in a csv file in the workspace.
@@ -33,55 +32,58 @@ def tc_calculator(workspace_path: Path, traces_path: Path, run_min: int, run_max
     run_max: int
         Maximum run to calculate the drift velocity of.
     """
+
+    point_path = (
+        Path(workspace_path) / "PointCloudLegacy" / f"{form_run_string(run)}.h5"
+    )
+    try:
+        point_file = h5.File(point_path, "r")
+    except Exception:
+        print(f"Point cloud file not found for run {run}!")
+        return 
+    
     # Make results array
     sum_pads = np.zeros((NUM_CHANNELS))
     hits_per_pad = np.zeros((NUM_CHANNELS))
 
-    # Analyze each run
-    for run in range(run_min, run_max + 1):
+    # Result storage for run
+    sum_pads = np.zeros(NUM_CHANNELS)
+    hits_per_pad = np.zeros(NUM_CHANNELS, dtype=np.int64)
 
-        point_file: h5.File | None = None
-        point_path = (
-            Path(workspace_path) / "PointCloudLegacy" / f"{form_run_string(run)}.h5"
-        )
+    cloud_group: h5.Group = point_file["cloud"]
+    min_event: int = cloud_group.attrs["min_event"]
+    max_event: int = cloud_group.attrs["max_event"]
+
+    # Go through each event
+    for idx in range(min_event, max_event + 1):
+
+        cloud_data: h5.Dataset | None = None
         try:
-            point_file = h5.File(point_path, "r")
+            cloud_data = cloud_group[f"cloud_{idx}"]  # type: ignore
         except Exception:
-            print(f"Point cloud file not found for run {run}!")
             continue
 
-        # Result storage for run
-        sum_pads = np.zeros(NUM_CHANNELS)
-        hits_per_pad = np.zeros(NUM_CHANNELS, dtype=np.int64)
+        if cloud_data is None:
+            continue
 
-        cloud_group: h5.Group = point_file["cloud"]
-        min_event: int = cloud_group.attrs["min_event"]
-        max_event: int = cloud_group.attrs["max_event"]
+        pc: np.ndarray = cloud_data[:].copy()
+        pads_event, hits_event = pad_times(pc)
 
-        # Go through each event
-        for idx in range(min_event, max_event + 1):
+        sum_pads += pads_event
+        hits_per_pad += hits_event
 
-            cloud_data: h5.Dataset | None = None
-            try:
-                cloud_data = cloud_group[f"cloud_{idx}"]  # type: ignore
-            except Exception:
-                continue
+    # factors = np.divide(sum_pads, hits_per_pad, where=hits_per_pad != 0)
+    # mask = hits_per_pad == 0
+    # ma_factors = np.ma.array(factors, mask=mask)
+    # factors_avg = np.ma.average(ma_factors)
+    # answer = factors_avg - factors
 
-            if cloud_data is None:
-                continue
+    mask = hits_per_pad > 0
+    factors = np.divide(sum_pads, hits_per_pad, where=mask)
+    factors_avg = np.average(factors[mask])
+    answer = np.subtract(factors_avg, factors, where=mask)
 
-            pc: np.ndarray = cloud_data[:].copy()
-            pads_event, hits_event = pad_times(pc)
-
-            sum_pads += pads_event
-            hits_per_pad += hits_event
-
-    factors = np.divide(sum_pads, hits_per_pad, where=hits_per_pad != 0)
-    mask = hits_per_pad == 0
-    ma_factors = np.ma.array(factors, mask=mask)
-    factors_avg = np.ma.average(ma_factors)
-    answer = factors_avg - factors
-    np.savetxt("/Users/attpc/Desktop/welp.csv", answer, fmt="%.4f")
+    np.savetxt("C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\welp.csv", answer, fmt="%.4f")
 
 
 @njit
@@ -115,7 +117,7 @@ def pad_times(pc: np.ndarray):
 
 
 def main():
-    tc_calculator(workspace_path, trace_path, run_min, run_max)
+    tc_calculator(workspace_path, trace_path, run)
 
 
 if __name__ == "__main__":
