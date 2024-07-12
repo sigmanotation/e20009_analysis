@@ -1,7 +1,7 @@
 from spyral.core.phase import PhaseLike, PhaseResult
 from spyral.core.run_stacks import form_run_string
 from spyral.core.status_message import StatusMessage
-from spyral.core.config import GetParameters
+from spyral.core.config import GetParameters, PadParameters
 from spyral.correction import (
     generate_electron_correction,
     create_electron_corrector,
@@ -30,7 +30,7 @@ from spyral.phases.pointcloud_legacy_phase import get_event_range
 from spyral.correction.generate import interpolate_initial_rho
 
 # Import e20009 specific data classes
-from e20009_phases.config import ICParameters, DetectorParameters, PadParameters
+from e20009_phases.config import ICParameters, DetectorParameters
 
 import h5py as h5
 import numpy as np
