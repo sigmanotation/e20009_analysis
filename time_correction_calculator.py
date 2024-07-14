@@ -16,13 +16,19 @@ run = 378
 
 def tc_calculator(workspace_path: Path, traces_path: Path, run: int):
     """
-    Calculates the micromegas and window time buckets of beam events in a run to find its drift velocity using downscale beam events.
-    The error of both these edges is found as well. The results are output in a csv file in the workspace.
+    Determines the time correction of each pad using pulser runs. This function analyzes the 
+    point clouds produced from running pulser runs through Spyral. For each pad in a pulser 
+    run, its earliest point from each event is added together. This number is divided by number 
+    of terms in the sum to find the average. The time correction factor is in time buckets. 
 
-    The PointcloudLegacyPhase must be run on the data before the drift velocity is calculated.
+    WARNING: The PointcloudLegacyPhase must be run on the data before the time correction 
+    factors are found. Also, two things must be turned off in the PointCloudLegacyPhase.
+    First, turn the condition off that if a pad has more than x points it is not added to the 
+    point cloud. Second, remove the time correction factor from being applied to the time
+    bucket of the point cloud (because this function will find it).
 
-    Arguments
-    ---------
+    Parameters
+    ----------
     workspace_path: Path
         Path to workspace where attpc_spyral results are stored.
     traces_path: Path
@@ -46,7 +52,7 @@ def tc_calculator(workspace_path: Path, traces_path: Path, run: int):
     sum_pads = np.zeros((NUM_CHANNELS))
     hits_per_pad = np.zeros((NUM_CHANNELS))
 
-    # Result storage for run
+    # Result storage
     sum_pads = np.zeros(NUM_CHANNELS)
     hits_per_pad = np.zeros(NUM_CHANNELS, dtype=np.int64)
 
@@ -68,26 +74,42 @@ def tc_calculator(workspace_path: Path, traces_path: Path, run: int):
 
         pc: np.ndarray = cloud_data[:].copy()
         pads_event, hits_event = pad_times(pc)
-
         sum_pads += pads_event
         hits_per_pad += hits_event
 
-    # factors = np.divide(sum_pads, hits_per_pad, where=hits_per_pad != 0)
-    # mask = hits_per_pad == 0
-    # ma_factors = np.ma.array(factors, mask=mask)
-    # factors_avg = np.ma.average(ma_factors)
-    # answer = factors_avg - factors
-
-    mask = hits_per_pad > 0
+    mask = hits_per_pad != 0
     factors = np.divide(sum_pads, hits_per_pad, where=mask)
-    factors_avg = np.average(factors[mask])
-    answer = np.subtract(factors_avg, factors, where=mask)
+    factors_avg = np.mean(factors[mask])
+    answer = np.where(mask, factors_avg-factors, 0)
 
     np.savetxt("C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\welp.csv", answer, fmt="%.4f")
 
 
 @njit
 def pad_times(pc: np.ndarray):
+    """ 
+    Auxiliary function to tc_calculator. It finds the first point of each pad
+    in a given event, recording its time bucket.
+    
+    This function encompasses a large for loop through all the points of an 
+    event's point cloud and is jitted to speed up the time it takes to run 
+    tc_calculator.
+
+    Parameters
+    ----------
+    pc: np.ndarray
+        Point cloud of an event produced by Spyral
+
+    Returns
+    -------
+    pads_event: np.ndarray
+        NUM_CHANNELSx1 array of each pad's earliest point in
+        the point cloud. The pad number is given by the index.
+
+    hits_event: np.ndarray
+        NUM_CHANNELSx1 array indicating if a pad saw any points.
+        It is either 1 or 0.
+    """
 
     # Result storage for event
     pads_event = np.zeros(NUM_CHANNELS)
@@ -98,7 +120,6 @@ def pad_times(pc: np.ndarray):
         pad_id = int(point[5])
         tb = point[6]
 
-        # THIS SHOULDNT BE NEEDED, ASK GORDON
         if tb == 0:
             continue
 
