@@ -11,7 +11,7 @@ NUM_CHANNELS = 10240
 # Configuration parameters
 workspace_path = Path("D:\\test_pulser")
 trace_path = Path("D:\\pulser_h5")
-run = 378
+run = 375
 
 
 def tc_calculator(workspace_path: Path, traces_path: Path, run: int):
@@ -47,25 +47,23 @@ def tc_calculator(workspace_path: Path, traces_path: Path, run: int):
     except Exception:
         print(f"Point cloud file not found for run {run}!")
         return 
-    
-    # Make results array
-    sum_pads = np.zeros((NUM_CHANNELS))
-    hits_per_pad = np.zeros((NUM_CHANNELS))
-
-    # Result storage
-    sum_pads = np.zeros(NUM_CHANNELS)
-    hits_per_pad = np.zeros(NUM_CHANNELS, dtype=np.int64)
 
     cloud_group: h5.Group = point_file["cloud"]
     min_event: int = cloud_group.attrs["min_event"]
     max_event: int = cloud_group.attrs["max_event"]
+    num_events = max_event - min_event + 1
+
+    # Result storage
+    pad_tb = np.zeros((NUM_CHANNELS, num_events), dtype=np.int64)
+    pad_hits = np.zeros((NUM_CHANNELS, num_events), dtype=np.int64)
 
     # Go through each event
-    for idx in range(min_event, max_event + 1):
+    for idx in range(num_events):
+        event = min_event + idx
 
         cloud_data: h5.Dataset | None = None
         try:
-            cloud_data = cloud_group[f"cloud_{idx}"]  # type: ignore
+            cloud_data = cloud_group[f"cloud_{event}"]  # type: ignore
         except Exception:
             continue
 
@@ -74,15 +72,28 @@ def tc_calculator(workspace_path: Path, traces_path: Path, run: int):
 
         pc: np.ndarray = cloud_data[:].copy()
         pads_event, hits_event = pad_times(pc)
-        sum_pads += pads_event
-        hits_per_pad += hits_event
+        pad_tb[:, idx] = pads_event
+        pad_hits[:, idx] = hits_event
 
-    mask = hits_per_pad != 0
-    factors = np.divide(sum_pads, hits_per_pad, where=mask)
-    factors_avg = np.mean(factors[mask])
-    answer = np.where(mask, factors_avg-factors, 0)
+    # Make mask array masking pads that have zero hits in an event
+    pad_tb_ma = np.ma.array(pad_tb, mask= pad_hits==0)
 
-    np.savetxt("C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\welp.csv", answer, fmt="%.4f")
+    # Find pad's average tb
+    pad_tb_avg = np.ma.mean(pad_tb_ma, axis=1)
+    pad_tb_err = np.ma.std(pad_tb_ma, axis=1)
+
+    # Find run's average tb
+    pad_tb_weights = pad_tb_err**-2 / np.ma.sum(pad_tb_err**-2)
+    run_tb_avg = np.ma.average(pad_tb_avg, weights=pad_tb_weights)
+    run_tb_err = np.ma.sqrt(1 / np.ma.sum(pad_tb_err**-2))
+
+    # Fint run's time bucket correction factors
+    tb_factors = run_tb_avg - pad_tb_avg
+    tb_factors_err = np.ma.sqrt(run_tb_err**2 + pad_tb_err**2)
+    tb_factors = tb_factors.filled(0.0)
+    tb_factors_err = tb_factors_err.filled(0.0)
+
+    np.savetxt("C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\welp.csv", np.transpose([tb_factors, tb_factors_err]), fmt="%.4f")
 
 
 @njit
@@ -112,16 +123,13 @@ def pad_times(pc: np.ndarray):
     """
 
     # Result storage for event
-    pads_event = np.zeros(NUM_CHANNELS)
+    pads_event = np.zeros(NUM_CHANNELS, dtype=np.int64)
     hits_event = np.zeros(NUM_CHANNELS, dtype=np.int64)
 
     for point in pc:
 
         pad_id = int(point[5])
-        tb = point[6]
-
-        if tb == 0:
-            continue
+        tb = int(point[6])
 
         if (
             pads_event[pad_id] == 0
