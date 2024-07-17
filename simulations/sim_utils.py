@@ -120,6 +120,8 @@ class SpyralWriter_e20009:
         dset.attrs["ic_sca_centroid"] = -1.0
         dset.attrs["ic_sca_multiplicity"] = -1.0
 
+        dset.flush()
+
     def set_number_of_events(self) -> None:
         """
         Writes the first and last written events as attributes to the current
