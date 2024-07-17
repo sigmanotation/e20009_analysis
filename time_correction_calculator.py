@@ -7,23 +7,24 @@ import numpy as np
 import h5py as h5
 
 NUM_CHANNELS = 10240
+THRESHOLD = 0.1
 
 # Configuration parameters
-workspace_path = Path("D:\\test_pulser")
-trace_path = Path("D:\\pulser_h5")
-run = 375
+workspace_path = Path("/Volumes/e20009/test_pulser")
+trace_path = Path("/Volumes/e20009/pulser_h5")
+run = 382
 
 
 def tc_calculator(workspace_path: Path, traces_path: Path, run: int):
     """
-    Determines the time correction of each pad using pulser runs. This function analyzes the 
-    point clouds produced from running pulser runs through Spyral. For each pad in a pulser 
-    run, its earliest point from each event is added together. This number is divided by number 
-    of terms in the sum to find the average. The time correction factor is in time buckets. 
+    Determines the time correction of each pad using pulser runs. This function analyzes the
+    point clouds produced from running pulser runs through Spyral. For each pad in a pulser
+    run, its earliest point from each event is added together. This number is divided by number
+    of terms in the sum to find the average. The time correction factor is in time buckets.
 
-    WARNING: The PointcloudLegacyPhase must be run on the data before the time correction 
+    WARNING: The PointcloudLegacyPhase must be run on the data before the time correction
     factors are found. Also, two things must be turned off in the PointCloudLegacyPhase.
-    First, turn the condition off that if a pad has more than x points it is not added to the 
+    First, turn the condition off that if a pad has more than x points it is not added to the
     point cloud. Second, remove the time correction factor from being applied to the time
     bucket of the point cloud (because this function will find it).
 
@@ -46,7 +47,7 @@ def tc_calculator(workspace_path: Path, traces_path: Path, run: int):
         point_file = h5.File(point_path, "r")
     except Exception:
         print(f"Point cloud file not found for run {run}!")
-        return 
+        return
 
     cloud_group: h5.Group = point_file["cloud"]
     min_event: int = cloud_group.attrs["min_event"]
@@ -75,8 +76,10 @@ def tc_calculator(workspace_path: Path, traces_path: Path, run: int):
         pad_tb[:, idx] = pads_event
         pad_hits[:, idx] = hits_event
 
-    # Make mask array masking pads that have zero hits in an event
-    pad_tb_ma = np.ma.array(pad_tb, mask= pad_hits==0)
+    # Make mask array masking pads that have many zero hits in an event
+    mask = np.sum(pad_hits, axis=1) < 0.1 * num_events
+    mask = np.tile(mask, (num_events, 1)).T
+    pad_tb_ma = np.ma.array(pad_tb, mask=mask)
 
     # Find pad's average tb
     pad_tb_avg = np.ma.mean(pad_tb_ma, axis=1)
@@ -93,17 +96,21 @@ def tc_calculator(workspace_path: Path, traces_path: Path, run: int):
     tb_factors = tb_factors.filled(0.0)
     tb_factors_err = tb_factors_err.filled(0.0)
 
-    np.savetxt("C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\welp.csv", np.transpose([tb_factors, tb_factors_err]), fmt="%.4f")
+    np.savetxt(
+        "/Users/attpc/Desktop/e20009_analysis/e20009_analysis/e20009_parameters/new2000mv.csv",
+        np.transpose([tb_factors, tb_factors_err]),
+        fmt="%.4f",
+    )
 
 
 @njit
 def pad_times(pc: np.ndarray):
-    """ 
+    """
     Auxiliary function to tc_calculator. It finds the first point of each pad
     in a given event, recording its time bucket.
-    
-    This function encompasses a large for loop through all the points of an 
-    event's point cloud and is jitted to speed up the time it takes to run 
+
+    This function encompasses a large for loop through all the points of an
+    event's point cloud and is jitted to speed up the time it takes to run
     tc_calculator.
 
     Parameters
