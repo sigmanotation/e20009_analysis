@@ -15,7 +15,7 @@ THRESHOLD = 0.1
 workspace_path = Path("/Volumes/e20009/test_pulser")
 write_path = Path("/Users/attpc/Desktop/teehee")
 write_raw = True
-run_min = 373
+run_min = 372
 run_max = 376
 
 
