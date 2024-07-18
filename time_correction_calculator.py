@@ -2,6 +2,7 @@ from spyral.core.run_stacks import form_run_string
 
 from pathlib import Path
 from numba import njit
+from scipy.stats import sem
 
 import numpy as np
 import h5py as h5
@@ -11,37 +12,33 @@ NUM_CHANNELS = 10240
 THRESHOLD = 0.1
 
 # Configuration parameters
-workspace_path = Path("D:\\test_pulser")
-write = True
-write_path = Path("C:\\Users\\zachs\\Desktop\\gg")
+workspace_path = Path("/Volumes/e20009/test_pulser")
+write_path = Path("/Users/attpc/Desktop/teehee")
+write_raw = True
+run_min = 373
+run_max = 376
 
-run_min = 372
-run_max = 382
 
-
-def run_tc_calculator(workspace_path: Path, run: int, write: bool, write_path: Path):
+def pulser_results(workspace_path: Path, run: int):
     """
-    Determines the time correction of each pad using pulser runs. This function analyzes the
-    point clouds produced from running pulser runs through Spyral. For each pad in a pulser
-    run, its earliest point from each event is added together. This number is divided by number
-    of terms in the sum to find the average. The time correction factor is in time buckets.
-
-    WARNING: The PointcloudLegacyPhase must be run on the data before the time correction
-    factors are found. Also, two things must be turned off in the PointCloudLegacyPhase.
-    First, turn the condition off that if a pad has more than x points it is not added to the
-    point cloud. Second, remove the time correction factor from being applied to the time
-    bucket of the point cloud (because this function will find it).
+    Determines the time correction of each pad in a pulser run. This function analyzes the
+    point clouds produced from running the pulser run through Spyral. For each pad in a pulser
+    run, its earliest point from each event is recorded. The average of these is the time
+    correction for that pad. Its error is the standard error of the mean.
 
     Parameters
     ----------
     workspace_path: Path
         Path to workspace where attpc_spyral results are stored.
-    traces_path: Path
-        Path to where HDF5 files are stored.
-    run_min: int
-        Minimum run to calculate the drift velocity of.
-    run_max: int
-        Maximum run to calculate the drift velocity of.
+    run: int
+        Run number of pulser run to analyze.
+
+    Returns
+    -------
+    np.ndarray
+        NUM_CHANNELS x 3 array where the row index is the pad number.
+        Column schema is (correction factor, correction factor error,
+        average pad amplitude).
     """
 
     point_path = (
@@ -54,6 +51,7 @@ def run_tc_calculator(workspace_path: Path, run: int, write: bool, write_path: P
         return
 
     cloud_group: h5.Group = point_file["cloud"]
+
     min_event: int = cloud_group.attrs["min_event"]
     max_event: int = cloud_group.attrs["max_event"]
     num_events = max_event - min_event + 1
@@ -76,9 +74,9 @@ def run_tc_calculator(workspace_path: Path, run: int, write: bool, write_path: P
 
         pc: np.ndarray = cloud_data[:].copy()
         event_results = pad_times(pc)
-        run_results[:, idx, 0] = event_results[:, 0]        # Time bucket
-        run_results[:, idx, 1] = event_results[:, 1]        # Amplitude
-        run_results[:, idx, 2] = event_results[:, 2]        # Hit
+        run_results[:, idx, 0] = event_results[:, 0]  # Time bucket
+        run_results[:, idx, 1] = event_results[:, 1]  # Amplitude
+        run_results[:, idx, 2] = event_results[:, 2]  # Hit
 
     # Make mask array masking pads that have many zero hits in an event
     mask = np.sum(run_results[:, :, 2], axis=1) < 0.1 * num_events
@@ -87,7 +85,9 @@ def run_tc_calculator(workspace_path: Path, run: int, write: bool, write_path: P
 
     # Find pad's average tb
     pad_tb_avg = np.ma.mean(pad_tb_ma, axis=1)
-    pad_tb_err = np.ma.std(pad_tb_ma, axis=1)
+    # NOTE this error is given by the standard deviation
+    # pad_tb_err = np.ma.std(pad_tb_ma, axis=1)
+    pad_tb_err = np.ma.array(sem(pad_tb_ma.filled(0.0), axis=1), mask=mask)
 
     # Find run's average tb
     pad_tb_weights = pad_tb_err**-2 / np.ma.sum(pad_tb_err**-2)
@@ -158,52 +158,85 @@ def pad_times(pc: np.ndarray):
     return event_results
 
 
-def tc_linear_fit(
+def time_correction_calculator(
     workspace_path: Path,
     run_min: int,
     run_max: int,
-    write: bool,
+    write_raw: bool,
     write_path: Path,
 ):
-    
-    num_runs = run_max - run_min +1
+    """
+    Determines the time correction (in time buckets) of each pad using pulser runs. Calculates
+    the time correction factors from each pulser run and applies a linear fit to them.
+
+    WARNING: The PointcloudLegacyPhase must be run on the data before the time correction
+    factors are found. Also, two things must be turned off in the PointCloudLegacyPhase.
+    First, turn the condition off that if a pad has more than x points it is not added to the
+    point cloud. Second, remove the time correction factor from being applied to the time
+    bucket of the point cloud (because this function will find it).
+
+    Parameters
+    ----------
+    workspace_path: Path
+        Path to workspace where attpc_spyral results are stored.
+    run_min: int
+        Minimum run to calculate the drift velocity of.
+    run_max: int
+        Maximum run to calculate the drift velocity of.
+    write_raw: bool
+        Whether to write the results array to disk. This has all the
+        time correction factors from each pad for all pulser runs along
+        with their errors and that pad's average signal amplitude (after
+        background removal).
+    write_path:
+        Directory to write time correction factors to and the results array
+        if write_raw is true.
+    """
+
+    num_runs = run_max - run_min + 1
 
     # Column schema is (time bucket, time bucket error, average amplitude)
     results = np.zeros((NUM_CHANNELS, 3, num_runs))
     fit_results = np.zeros((NUM_CHANNELS, 2))
 
+    # Find time correction factors from each pulser run
     for idx, run in enumerate(range(run_min, run_max + 1)):
-        run_results = run_tc_calculator(
-            workspace_path, run, write, write_path
-        )
+        run_results = pulser_results(workspace_path, run)
         results[:, :, idx] = run_results
 
+    # Linearly fit time correction factor as function of pad amplitude for each pad
     for pad in range(NUM_CHANNELS):
-        try:
-            linear_fit = lmfit.models.LinearModel()
-            # weights = 1.0 / np.sqrt(results[pad, 1, :])
-            # weights[results[pad, 1, :] == 0.0] = 1.0
 
-            weights = np.where(np.isclose(np.sqrt(results[pad, 1, :]), 0.0)==0.0, 0, 1/np.sqrt(results[pad, 1, :]))
+        # Don't fit bad pads
+        if np.sum(results[pad, 2, :], axis=0) == 0.0:
+            continue
 
-            # pars = linear_fit.guess(x=results[pad, 2, :], data=results[pad, 0, :], weights=weights)
-            # fit_result = linear_fit.fit(
-            #     params=pars, x=results[pad, 2, :], data=results[pad, 0, :], weights=weights
-            # )
+        linear_fit = lmfit.models.LinearModel()
+        weights = 1.0 / np.sqrt(results[pad, 1, :])
+        weights[results[pad, 1, :] == 0.0] = 1.0
+        pars = linear_fit.guess(
+            x=results[pad, 2, :],
+            data=results[pad, 0, :],
+            weights=weights,
+        )
+        fit = linear_fit.fit(
+            params=pars,
+            x=results[pad, 2, :],
+            data=results[pad, 0, :],
+            weights=weights,
+        )
 
-            # results[pad, 0] = fit_result.params["slope"]
-            # results[pad, 1] = fit_result.params["intercept"]
-        except:
-            results[pad, 0] = 0
-            results[pad, 1] = 0
+        fit_results[pad, 0] = fit.params["slope"]
+        fit_results[pad, 1] = fit.params["intercept"]
 
-    print(fit_results)
-    if write is True:
-        np.save(write_path / f"time_correction_results.npy", results)
+    if write_raw is True:
+        np.save(write_path / "time_correction_results.npy", results)
+
+    np.savetxt(write_path / "time_correction_fits.csv", fit_results, fmt="%.4f")
 
 
 def main():
-    tc_linear_fit(workspace_path, run_min, run_max, write, write_path)
+    time_correction_calculator(workspace_path, run_min, run_max, write_raw, write_path)
 
 
 if __name__ == "__main__":
