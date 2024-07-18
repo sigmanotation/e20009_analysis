@@ -167,7 +167,8 @@ def time_correction_calculator(
 ):
     """
     Determines the time correction (in time buckets) of each pad using pulser runs. Calculates
-    the time correction factors from each pulser run and applies a linear fit to them.
+    the time correction factors from each pulser run and applies a linear fit to them. The
+    intercept of the fit for each pad is written to disk as the time correction factor.
 
     WARNING: The PointcloudLegacyPhase must be run on the data before the time correction
     factors are found. Also, two things must be turned off in the PointCloudLegacyPhase.
@@ -207,13 +208,17 @@ def time_correction_calculator(
     # Linearly fit time correction factor as function of pad amplitude for each pad
     for pad in range(NUM_CHANNELS):
 
-        # Don't fit bad pads
+        # Don't fit pads that have zero signal amplitude for all runs
         if np.sum(results[pad, 2, :], axis=0) == 0.0:
             continue
 
         linear_fit = lmfit.models.LinearModel()
-        weights = 1.0 / np.sqrt(results[pad, 1, :])
-        weights[results[pad, 1, :] == 0.0] = 1.0
+
+        weights = np.sqrt(results[pad, 1, :])
+        weights = np.divide(
+            1, weights, out=np.zeros_like(weights), where=weights != 0.0
+        )
+
         pars = linear_fit.guess(
             x=results[pad, 2, :],
             data=results[pad, 0, :],
@@ -232,7 +237,7 @@ def time_correction_calculator(
     if write_raw is True:
         np.save(write_path / "time_correction_results.npy", results)
 
-    np.savetxt(write_path / "time_correction_fits.csv", fit_results, fmt="%.4f")
+    np.savetxt(write_path / "pad_time_correction.csv", fit_results[:, 1], fmt="%.4f")
 
 
 def main():
