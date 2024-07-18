@@ -11,23 +11,12 @@ NUM_CHANNELS = 10240
 THRESHOLD = 0.1
 
 # Configuration parameters
-workspace_path = Path("/Volumes/e20009/test_pulser")
+workspace_path = Path("D:\\test_pulser")
 write = True
-write_path = Path("/Users/attpc/Desktop/teehee")
+write_path = Path("C:\\Users\\zachs\\Desktop\\gg")
 
-pulser_info = {
-    372: 0.1,
-    373: 0.2,
-    374: 0.3,
-    375: 0.4,
-    376: 0.5,
-    377: 0.75,
-    378: 1.0,
-    379: 1.25,
-    380: 1.5,
-    381: 1.75,
-    382: 2.0,
-}
+run_min = 372
+run_max = 382
 
 
 def run_tc_calculator(workspace_path: Path, run: int, write: bool, write_path: Path):
@@ -70,9 +59,7 @@ def run_tc_calculator(workspace_path: Path, run: int, write: bool, write_path: P
     num_events = max_event - min_event + 1
 
     # Result storage
-    pad_tb = np.zeros((NUM_CHANNELS, num_events), dtype=np.int64)
-    pad_hits = np.zeros((NUM_CHANNELS, num_events), dtype=np.int64)
-    pad_amp = np.zeros((NUM_CHANNELS, num_events))
+    run_results = np.zeros((NUM_CHANNELS, num_events, 3))
 
     # Go through each event
     for idx in range(num_events):
@@ -88,15 +75,15 @@ def run_tc_calculator(workspace_path: Path, run: int, write: bool, write_path: P
             continue
 
         pc: np.ndarray = cloud_data[:].copy()
-        event_tb, event_hits, event_amp = pad_times(pc)
-        pad_tb[:, idx] = event_tb
-        pad_hits[:, idx] = event_hits
-        pad_amp[:, idx] = event_amp
+        event_results = pad_times(pc)
+        run_results[:, idx, 0] = event_results[:, 0]        # Time bucket
+        run_results[:, idx, 1] = event_results[:, 1]        # Amplitude
+        run_results[:, idx, 2] = event_results[:, 2]        # Hit
 
     # Make mask array masking pads that have many zero hits in an event
-    mask = np.sum(pad_hits, axis=1) < 0.1 * num_events
+    mask = np.sum(run_results[:, :, 2], axis=1) < 0.1 * num_events
     mask_array = np.tile(mask, (num_events, 1)).T
-    pad_tb_ma = np.ma.array(pad_tb, mask=mask_array)
+    pad_tb_ma = np.ma.array(run_results[:, :, 0], mask=mask_array)
 
     # Find pad's average tb
     pad_tb_avg = np.ma.mean(pad_tb_ma, axis=1)
@@ -114,17 +101,10 @@ def run_tc_calculator(workspace_path: Path, run: int, write: bool, write_path: P
     tb_factors_err = tb_factors_err.filled(0.0)
 
     # Find average amplitude of each pad
-    pad_amp_avg = np.mean(pad_amp, axis=1)
+    pad_amp_avg = np.mean(run_results[:, :, 1], axis=1)
     pad_amp_avg[mask] = 0.0
 
-    if write is True:
-        np.savetxt(
-            write_path / f"{form_run_string(run)}_time_correction.csv",
-            np.transpose([tb_factors, tb_factors_err, pad_amp_avg]),
-            fmt="%.4f",
-        )
-
-    return tb_factors, tb_factors_err, pad_amp_avg
+    return np.column_stack((tb_factors, tb_factors_err, pad_amp_avg))
 
 
 @njit
@@ -153,10 +133,8 @@ def pad_times(pc: np.ndarray):
         It is either 1 or 0.
     """
 
-    # Result storage for event
-    event_tb = np.zeros(NUM_CHANNELS, dtype=np.int64)
-    event_hits = np.zeros(NUM_CHANNELS, dtype=np.int64)
-    event_amp = np.zeros(NUM_CHANNELS, dtype=np.int64)
+    # Column schema is (time bucket, amplitude, hit)
+    event_results = np.zeros((NUM_CHANNELS, 3))
 
     for point in pc:
 
@@ -165,62 +143,65 @@ def pad_times(pc: np.ndarray):
         amp = point[3]
 
         if (
-            event_tb[pad_id] == 0
+            event_results[pad_id, 0] == 0
         ):  # Array is initialized with 0, so we always want to replace the first time a pad is encountered
-            event_tb[pad_id] = tb
-            event_amp[pad_id] = amp
-            event_hits[pad_id] += 1
+            event_results[pad_id, 0] = tb
+            event_results[pad_id, 1] = amp
+            event_results[pad_id, 2] = 1
 
         elif (
-            tb < event_tb[pad_id]
+            tb < event_results[pad_id, 0]
         ):  # Only take the smallest point from each trace in an event
-            event_tb[pad_id] = tb
-            event_amp[pad_id] = amp
+            event_results[pad_id, 0] = tb
+            event_results[pad_id, 1] = amp
 
-    return event_tb, event_hits, event_amp
+    return event_results
 
 
 def tc_linear_fit(
-    pulser_info: dict,
     workspace_path: Path,
+    run_min: int,
+    run_max: int,
     write: bool,
     write_path: Path,
 ):
+    
+    num_runs = run_max - run_min +1
 
-    all_tc_factors = np.zeros((NUM_CHANNELS, len(pulser_info)))
-    all_tc_err_factors = np.zeros((NUM_CHANNELS, len(pulser_info)))
-    all_pad_amp = np.zeros((NUM_CHANNELS, len(pulser_info)))
-    results = np.zeros((NUM_CHANNELS, 2))
+    # Column schema is (time bucket, time bucket error, average amplitude)
+    results = np.zeros((NUM_CHANNELS, 3, num_runs))
+    fit_results = np.zeros((NUM_CHANNELS, 2))
 
-    for idx, (run, voltage) in enumerate(pulser_info.items()):
-        tc_factor, tc_factor_err, pad_amp = run_tc_calculator(
+    for idx, run in enumerate(range(run_min, run_max + 1)):
+        run_results = run_tc_calculator(
             workspace_path, run, write, write_path
         )
-        all_tc_factors[:, idx] = tc_factor
-        all_tc_err_factors[:, idx] = tc_factor_err
-        all_pad_amp[:, idx] = tc_factor_err
+        results[:, :, idx] = run_results
 
-    for idx, (tc, err, amp) in enumerate(
-        zip(all_tc_factors, all_tc_err_factors, all_pad_amp)
-    ):
-        pass
-        # print(amp)
-        # linear_fit = lmfit.models.LinearModel()
-        # weights = 1.0 / np.sqrt(err)
-        # weights[err == 0.0] = 1.0
-        # pars = linear_fit.guess(x=list(pulser_info.values()), data=tc, weights=weights)
-        # fit_result = linear_fit.fit(
-        #     params=pars, x=list(pulser_info.values()), data=tc, weights=weights
-        # )
+    # for idx, (tc, err, amp) in enumerate(
+    #     zip(all_tc_factors, all_tc_err_factors, all_pad_amp)
+    # ):
+    #     try:
+    #         linear_fit = lmfit.models.LinearModel()
+    #         weights = 1.0 / np.sqrt(err)
+    #         weights[err == 0.0] = 1.0
+    #         pars = linear_fit.guess(x=amp, data=tc, weights=weights)
+    #         fit_result = linear_fit.fit(
+    #             params=pars, x=amp, data=tc, weights=weights
+    #         )
 
-        # results[idx, 0] = fit_result.params["slope"]
-        # results[idx, 1] = fit_result.params["intercept"]
+    #         results[idx, 0] = fit_result.params["slope"]
+    #         results[idx, 1] = fit_result.params["intercept"]
+    #     except:
+    #         results[idx, 0] = 0
+    #         results[idx, 1] = 0
 
-    # print(results)
+    if write is True:
+        np.save(write_path / f"time_correction_results.npy", results)
 
 
 def main():
-    tc_linear_fit(pulser_info, workspace_path, write, write_path)
+    tc_linear_fit(workspace_path, run_min, run_max, write, write_path)
 
 
 if __name__ == "__main__":
