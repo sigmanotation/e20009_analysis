@@ -178,24 +178,26 @@ def tc_linear_fit(
         )
         results[:, :, idx] = run_results
 
-    # for idx, (tc, err, amp) in enumerate(
-    #     zip(all_tc_factors, all_tc_err_factors, all_pad_amp)
-    # ):
-    #     try:
-    #         linear_fit = lmfit.models.LinearModel()
-    #         weights = 1.0 / np.sqrt(err)
-    #         weights[err == 0.0] = 1.0
-    #         pars = linear_fit.guess(x=amp, data=tc, weights=weights)
-    #         fit_result = linear_fit.fit(
-    #             params=pars, x=amp, data=tc, weights=weights
-    #         )
+    for pad in range(NUM_CHANNELS):
+        try:
+            linear_fit = lmfit.models.LinearModel()
+            # weights = 1.0 / np.sqrt(results[pad, 1, :])
+            # weights[results[pad, 1, :] == 0.0] = 1.0
 
-    #         results[idx, 0] = fit_result.params["slope"]
-    #         results[idx, 1] = fit_result.params["intercept"]
-    #     except:
-    #         results[idx, 0] = 0
-    #         results[idx, 1] = 0
+            weights = np.where(np.isclose(np.sqrt(results[pad, 1, :]), 0.0)==0.0, 0, 1/np.sqrt(results[pad, 1, :]))
 
+            # pars = linear_fit.guess(x=results[pad, 2, :], data=results[pad, 0, :], weights=weights)
+            # fit_result = linear_fit.fit(
+            #     params=pars, x=results[pad, 2, :], data=results[pad, 0, :], weights=weights
+            # )
+
+            # results[pad, 0] = fit_result.params["slope"]
+            # results[pad, 1] = fit_result.params["intercept"]
+        except:
+            results[pad, 0] = 0
+            results[pad, 1] = 0
+
+    print(fit_results)
     if write is True:
         np.save(write_path / f"time_correction_results.npy", results)
 
