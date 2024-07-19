@@ -12,151 +12,11 @@ NUM_CHANNELS = 10240
 THRESHOLD = 0.1
 
 # Configuration parameters
-workspace_path = Path("/Volumes/e20009/test_pulser")
-write_path = Path("/Users/attpc/Desktop/teehee")
+workspace_path = Path("D:\\test_pulser")
+write_path = Path("C:\\Users\\zachs\\Desktop\\gg")
 write_raw = True
 run_min = 372
 run_max = 376
-
-
-def pulser_results(workspace_path: Path, run: int):
-    """
-    Determines the time correction of each pad in a pulser run. This function analyzes the
-    point clouds produced from running the pulser run through Spyral. For each pad in a pulser
-    run, its earliest point from each event is recorded. The average of these is the time
-    correction for that pad. Its error is the standard error of the mean.
-
-    Parameters
-    ----------
-    workspace_path: Path
-        Path to workspace where attpc_spyral results are stored.
-    run: int
-        Run number of pulser run to analyze.
-
-    Returns
-    -------
-    np.ndarray
-        NUM_CHANNELS x 3 array where the row index is the pad number.
-        Column schema is (correction factor, correction factor error,
-        average pad amplitude).
-    """
-
-    point_path = (
-        Path(workspace_path) / "PointCloudLegacy" / f"{form_run_string(run)}.h5"
-    )
-    try:
-        point_file = h5.File(point_path, "r")
-    except Exception:
-        print(f"Point cloud file not found for run {run}!")
-        return
-
-    cloud_group: h5.Group = point_file["cloud"]
-
-    min_event: int = cloud_group.attrs["min_event"]
-    max_event: int = cloud_group.attrs["max_event"]
-    num_events = max_event - min_event + 1
-
-    # Result storage
-    run_results = np.zeros((NUM_CHANNELS, num_events, 3))
-
-    # Go through each event
-    for idx in range(num_events):
-        event = min_event + idx
-
-        cloud_data: h5.Dataset | None = None
-        try:
-            cloud_data = cloud_group[f"cloud_{event}"]  # type: ignore
-        except Exception:
-            continue
-
-        if cloud_data is None:
-            continue
-
-        pc: np.ndarray = cloud_data[:].copy()
-        event_results = pad_times(pc)
-        run_results[:, idx, 0] = event_results[:, 0]  # Time bucket
-        run_results[:, idx, 1] = event_results[:, 1]  # Amplitude
-        run_results[:, idx, 2] = event_results[:, 2]  # Hit
-
-    # Make mask array masking pads that have many zero hits in an event
-    mask = np.sum(run_results[:, :, 2], axis=1) < 0.1 * num_events
-    mask_array = np.tile(mask, (num_events, 1)).T
-    pad_tb_ma = np.ma.array(run_results[:, :, 0], mask=mask_array)
-
-    # Find pad's average tb
-    pad_tb_avg = np.ma.mean(pad_tb_ma, axis=1)
-    # NOTE this error is given by the standard deviation
-    # pad_tb_err = np.ma.std(pad_tb_ma, axis=1)
-    pad_tb_err = np.ma.array(sem(pad_tb_ma.filled(0.0), axis=1), mask=mask)
-
-    # Find run's average tb
-    pad_tb_weights = pad_tb_err**-2 / np.ma.sum(pad_tb_err**-2)
-    run_tb_avg = np.ma.average(pad_tb_avg, weights=pad_tb_weights)
-    run_tb_err = np.ma.sqrt(1 / np.ma.sum(pad_tb_err**-2))
-
-    # Find run's time bucket correction factors
-    tb_factors = run_tb_avg - pad_tb_avg
-    tb_factors_err = np.ma.sqrt(run_tb_err**2 + pad_tb_err**2)
-    tb_factors = tb_factors.filled(0.0)
-    tb_factors_err = tb_factors_err.filled(0.0)
-
-    # Find average amplitude of each pad
-    pad_amp_avg = np.mean(run_results[:, :, 1], axis=1)
-    pad_amp_avg[mask] = 0.0
-
-    return np.column_stack((tb_factors, tb_factors_err, pad_amp_avg))
-
-
-@njit
-def pad_times(pc: np.ndarray):
-    """
-    Auxiliary function to tc_calculator. It finds the first point of each pad
-    in a given event, recording its time bucket.
-
-    This function encompasses a large for loop through all the points of an
-    event's point cloud and is jitted to speed up the time it takes to run
-    tc_calculator.
-
-    Parameters
-    ----------
-    pc: np.ndarray
-        Point cloud of an event produced by Spyral
-
-    Returns
-    -------
-    pads_event: np.ndarray
-        NUM_CHANNELSx1 array of each pad's earliest point in
-        the point cloud. The pad number is given by the index.
-
-    hits_event: np.ndarray
-        NUM_CHANNELSx1 array indicating if a pad saw any points.
-        It is either 1 or 0.
-    """
-
-    # Column schema is (time bucket, amplitude, hit)
-    event_results = np.zeros((NUM_CHANNELS, 3))
-
-    for point in pc:
-
-        pad_id = int(point[5])
-        tb = int(point[6])
-        amp = point[3]
-
-        if (
-            event_results[pad_id, 0] == 0
-        ):  # Array is initialized with 0, so we always want to replace the first time a pad is encountered
-            event_results[pad_id, 0] = tb
-            event_results[pad_id, 1] = amp
-            event_results[pad_id, 2] = 1
-
-        elif (
-            tb < event_results[pad_id, 0]
-        ):  # Only take the smallest point from each trace in an event
-            event_results[pad_id, 0] = tb
-            event_results[pad_id, 1] = amp
-
-    return event_results
-
 
 def time_correction_calculator(
     workspace_path: Path,
@@ -175,6 +35,10 @@ def time_correction_calculator(
     First, turn the condition off that if a pad has more than x points it is not added to the
     point cloud. Second, remove the time correction factor from being applied to the time
     bucket of the point cloud (because this function will find it).
+
+    WARNING: The GetParameters needed to be tweaked when running the pulser runs through
+    the PointcloudLegacyPhase of Spyral. Specifically, the peak threshold was set to 100 and 
+    the max peak width to 300.
 
     Parameters
     ----------
@@ -237,7 +101,147 @@ def time_correction_calculator(
     if write_raw is True:
         np.save(write_path / "time_correction_results.npy", results)
 
-    np.savetxt(write_path / "pad_time_correction.csv", fit_results[:, 1], fmt="%.4f")
+    np.savetxt(write_path / "pad_time_correction.csv", fit_results[:, 1], newline=",\n", fmt="%.4f")
+
+def pulser_results(workspace_path: Path, run: int):
+    """
+    Determines the time correction of each pad in a pulser run. This function analyzes the
+    point clouds produced from running the pulser run through Spyral. For each pad in a pulser
+    run, its earliest point from each event is recorded. The average of these is the time
+    correction for that pad. Its error is the standard error of the mean.
+
+    Parameters
+    ----------
+    workspace_path: Path
+        Path to workspace where attpc_spyral results are stored.
+    run: int
+        Run number of pulser run to analyze.
+
+    Returns
+    -------
+    np.ndarray
+        NUM_CHANNELS x 3 array where the row index is the pad number.
+        Column schema is (correction factor, correction factor error,
+        average pad amplitude).
+    """
+
+    point_path = (
+        Path(workspace_path) / "PointCloudLegacy" / f"{form_run_string(run)}.h5"
+    )
+    try:
+        point_file = h5.File(point_path, "r")
+    except Exception:
+        print(f"Point cloud file not found for run {run}!")
+        return
+
+    cloud_group: h5.Group = point_file["cloud"]
+
+    min_event: int = cloud_group.attrs["min_event"]
+    max_event: int = cloud_group.attrs["max_event"]
+    num_events = max_event - min_event + 1
+
+    # Result storage
+    run_results = np.zeros((NUM_CHANNELS, num_events, 3))
+
+    # Go through each event
+    for idx in range(num_events):
+        event = min_event + idx
+
+        cloud_data: h5.Dataset | None = None
+        try:
+            cloud_data = cloud_group[f"cloud_{event}"]  # type: ignore
+        except Exception:
+            continue
+
+        if cloud_data is None:
+            continue
+
+        pc: np.ndarray = cloud_data[:].copy()
+        evt_res = event_results(pc)
+        run_results[:, idx, 0] = evt_res[:, 0]  # Time bucket
+        run_results[:, idx, 1] = evt_res[:, 1]  # Amplitude
+        run_results[:, idx, 2] = evt_res[:, 2]  # Hit
+
+    # Make mask array masking pads that have many zero hits in an event
+    mask = np.sum(run_results[:, :, 2], axis=1) < 0.1 * num_events
+    mask_array = np.tile(mask, (num_events, 1)).T
+    pad_tb_ma = np.ma.array(run_results[:, :, 0], mask=mask_array)
+
+    # Find pad's average tb
+    pad_tb_avg = np.ma.mean(pad_tb_ma, axis=1)
+    # NOTE this error is given by the standard deviation
+    # pad_tb_err = np.ma.std(pad_tb_ma, axis=1)
+    pad_tb_err = np.ma.array(sem(pad_tb_ma.filled(0.0), axis=1), mask=mask)
+
+    # Find run's average tb
+    pad_tb_weights = pad_tb_err**-2 / np.ma.sum(pad_tb_err**-2)
+    run_tb_avg = np.ma.average(pad_tb_avg, weights=pad_tb_weights)
+    run_tb_err = np.ma.sqrt(1 / np.ma.sum(pad_tb_err**-2))
+
+    # Find run's time bucket correction factors
+    tb_factors = run_tb_avg - pad_tb_avg
+    tb_factors_err = np.ma.sqrt(run_tb_err**2 + pad_tb_err**2)
+    tb_factors = tb_factors.filled(0.0)
+    tb_factors_err = tb_factors_err.filled(0.0)
+
+    # Find average amplitude of each pad
+    pad_amp_avg = np.mean(run_results[:, :, 1], axis=1)
+    pad_amp_avg[mask] = 0.0
+
+    return np.column_stack((tb_factors, tb_factors_err, pad_amp_avg))
+
+
+@njit
+def event_results(pc: np.ndarray):
+    """
+    Auxiliary function to pulser_results. It finds the first point of each pad
+    in a given event, recording its time bucket and amplitude. It also indicates
+    which pad was hit.
+
+    This function encompasses a large for-loop through all the points of an
+    event's point cloud and is jitted to speed up the time it takes to run
+    pulser_results.
+
+    Note: this function turns the time bucket of the point into an integer,
+    i.e. it rounds it down. We don't want our time bucket smearing to be 
+    taken into consideration; we already know that the error in a time bucket 
+    is one, we are searching for the error of the time bucket.
+
+    Parameters
+    ----------
+    pc: np.ndarray
+        Point cloud of an event produced by Spyral
+
+    Returns
+    -------
+    np.ndarray
+        NUM_CHANNELS x 3 array where the row index is the pad number.
+        Column schema is (correction factor, pad amplitude, hit indicator).
+    """
+
+    # Column schema is (time bucket, amplitude, hit)
+    event_results = np.zeros((NUM_CHANNELS, 3))
+
+    for point in pc:
+
+        pad_id = int(point[5])
+        tb = int(point[6])
+        amp = point[3]
+
+        if (
+            event_results[pad_id, 0] == 0
+        ):  # Array is initialized with 0, so we always want to replace the first time a pad is encountered
+            event_results[pad_id, 0] = tb
+            event_results[pad_id, 1] = amp
+            event_results[pad_id, 2] = 1
+
+        elif (
+            tb < event_results[pad_id, 0]
+        ):  # Only take the smallest point from each trace in an event
+            event_results[pad_id, 0] = tb
+            event_results[pad_id, 1] = amp
+
+    return event_results
 
 
 def main():
