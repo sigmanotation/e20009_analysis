@@ -5,7 +5,7 @@ from spyral import INVALID_PATH
 
 @dataclass
 class ICParameters:
-    """Parameters for FRIBDAQ (IC, Si, etc) trace signal analysis
+    """Parameters for IC trace signal analysis. Also includes downscale beam trace
 
     Attributes
     ----------
@@ -66,28 +66,6 @@ class DetectorParameters:
     get_frequency: float  # MHz
     garfield_file_path: Path
     do_garfield_correction: bool
-
-
-@dataclass
-class PadParameters:
-    """Parameters describing the pad map paths
-
-    Attributes
-    ----------
-    pad_geometry_path: Path
-        Path to the csv file containing the pad geometry
-    pad_time_path: Path
-        Path to the csv file containing the pad time corrections
-    pad_electronics_path: Path
-        Path to the csv file containing the pad electronics ids
-    """
-
-    is_default: bool
-    is_default_legacy: bool
-    pad_geometry_path: Path
-    pad_time_path: Path
-    pad_electronics_path: Path
-    pad_scale_path: Path
 
 
 @dataclass

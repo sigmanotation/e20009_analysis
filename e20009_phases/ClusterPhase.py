@@ -16,7 +16,7 @@ from multiprocessing import SimpleQueue
 from numpy.random import Generator
 
 """
-Changes from attpc_spyral package base code (circa May 22, 2024):
+Changes from attpc_spyral package base code (circa June 1, 2024):
     - ClusterPhase uses the PointCloud class defined in e20009_phases.PointcloudLegacyPhase.
     - ClusterPhase run method appends the IC SCA centroid and multiplicity information to the result. 
       Fixed small bug with nevents number being incorrect; 1 was added to it.
@@ -140,7 +140,9 @@ class ClusterPhase(PhaseLike):
 
             cloud = PointCloud()
             cloud.load_cloud_from_hdf5_data(cloud_data[:].copy(), idx)
-
+            
+            # Here we don't need to use the labels array.
+            # We just pass it along as needed.
             clusters, labels = form_clusters(cloud, self.cluster_params)
             joined, labels = join_clusters(clusters, self.cluster_params, labels)
             cleaned, _ = cleanup_clusters(joined, self.cluster_params, labels)

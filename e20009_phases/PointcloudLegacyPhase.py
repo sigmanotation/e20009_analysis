@@ -1,7 +1,7 @@
 from spyral.core.phase import PhaseLike, PhaseResult
 from spyral.core.run_stacks import form_run_string
 from spyral.core.status_message import StatusMessage
-from spyral.core.config import GetParameters
+from spyral.core.config import GetParameters, PadParameters
 from spyral.correction import (
     generate_electron_correction,
     create_electron_corrector,
@@ -30,7 +30,7 @@ from spyral.phases.pointcloud_legacy_phase import get_event_range
 from spyral.correction.generate import interpolate_initial_rho
 
 # Import e20009 specific data classes
-from e20009_phases.config import ICParameters, DetectorParameters, PadParameters
+from e20009_phases.config import ICParameters, DetectorParameters
 
 import h5py as h5
 import numpy as np
@@ -42,12 +42,10 @@ from multiprocessing import SimpleQueue
 from contourpy import contour_generator
 
 """
-Changes from attpc_spyral package base code (circa May 22, 2024):
+Changes from attpc_spyral package base code (circa June 1, 2024):
     - PointcloudLegacyPhase takes modified config classes found in the config.py file. These include
       the ICParameters class (called FRIBParameters in the attpc_spyral package) and modified 
       DetectorParameters and PadParameters. See that file for more information on their attributes.
-    - PointcloudLegacyPhase create_assets method had an error where the first two arguments passed to
-      generate_electron_correction were switched.
     - generate_electron_correction uses the average window and micromegas time buckets calculated from 
       all runs in the drift velocity file.
     - PointcloudLegacyPhase run method now takes the window and micromegas time buckets to calculate
@@ -55,13 +53,12 @@ Changes from attpc_spyral package base code (circa May 22, 2024):
       attributes to the output HDF5 file. It also writes information related to the IC and IC SCA traces
       to a parquet file in the workspace. Fixed small bug with nevents number being incorrect; 1 was added
       to it.
-    - GetLegacyEvent load_traces method extracts IC SCA and downscale beam traces. It also removes traces
-      that have 10 or more points.
+    - GetLegacyEvent load_traces method extracts IC SCA and downscale beam traces.
     - GetTrace find_peaks method takes a new parameter called min_width. The floor is now taken for both 
       inflection points.
-    - GetTrace has a new method called remove_peaks.
-    - PointCloud load_cloud_from_get_event method does not pull a pad gain value from a value to multiply
-      a point's integral by.
+    - GetTrace has a new method called remove_peaks to remove invalid IC and IC SCA peaks. It is used in
+      the PointcloudLegacyPhase run method.
+    - PointCloud does not accept traces that have 10 or more peaks (points).
     - PointCloud calibrate_z_position method does not take ic_correction as a parameter.
 """
 
@@ -195,8 +192,8 @@ class PointcloudLegacyPhase(PhaseLike):
                 f"No drift velocity found for run {payload.run_number}, phase 1 cannot be run!",
             )
             return PhaseResult.invalid_result(payload.run_number)
-        mm_tb: float = dv_df.get_column("micro_mean")[0]
-        w_tb: float = dv_df.get_column("wind_mean")[0]
+        mm_tb: float = dv_df.get_column("average_micromegas_tb")[0]
+        w_tb: float = dv_df.get_column("average_window_tb")[0]
 
         # Beam event results
         beam_events: dict[str, list] = {
@@ -456,12 +453,8 @@ class GetLegacyEvent:
                 self.beam_ds_trace = trace
                 self.beam_ds_trace.find_peaks(ic_params, rng, rel_height=0.8)
 
-        # Remove CoBo 10 from our normal traces along with any other traces with 10 or more points
-        self.traces = [
-            trace
-            for trace in self.traces
-            if (trace.hw_id.cobo_id != 10) and (trace.get_number_of_peaks() < 10)
-        ]
+        # Remove CoBo 10 from our normal traces
+        self.traces = [trace for trace in self.traces if trace.hw_id.cobo_id != 10]
 
     def is_valid(self) -> bool:
         return self.name != INVALID_EVENT_NAME and self.number != INVALID_EVENT_NUMBER
@@ -729,7 +722,8 @@ class PointCloud:
         self.cloud = np.zeros((count, 8))
         idx = 0
         for trace in event.traces:
-            if trace.get_number_of_peaks() == 0 or trace.get_number_of_peaks() > 5:
+            # Skip traces with no peaks and those with 10 or more peaks
+            if (trace.get_number_of_peaks() == 0) or trace.get_number_of_peaks() >= 10:
                 continue
 
             pid = trace.hw_id.pad_id
@@ -807,7 +801,7 @@ class PointCloud:
     ):
         """Calibrate the cloud z-position from the micromegas and window time references
 
-        Also applies the ion chamber time correction and electric field correction if given
+        Also applies the electric field correction if given
         Trims any points beyond the bounds of the detector (0 to detector length)
 
         Parameters
@@ -874,8 +868,8 @@ def generate_electron_correction(
 
     # Use average window and micromegas time buckets from all runs in the drift velocity file
     dv_df: pl.DataFrame = pl.read_csv(params.drift_velocity_path)
-    w_tb = int(dv_df.select(pl.mean("wind_mean"))[0, 0])
-    mm_tb = int(dv_df.select(pl.mean("micro_mean"))[0, 0])
+    w_tb = int(dv_df.select(pl.mean("average_window_tb"))[0, 0])
+    mm_tb = int(dv_df.select(pl.mean("average_micromegas_tb"))[0, 0])
 
     garfield_data: np.ndarray = np.loadtxt(garf_file_path, dtype=float)
 

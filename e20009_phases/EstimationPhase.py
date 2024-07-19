@@ -25,7 +25,7 @@ from scipy.stats import linregress
 from enum import Enum
 
 """
-Changes from attpc_spyral package base code (circa May 22, 2024):
+Changes from attpc_spyral package base code (circa June 1, 2024):
     - EstimationPhase run method had small bug with nevents number being incorrect fixed; 1 was added
       to it. Estimation results now includes IC SCA information written to the output parquet file. 
       Including the IC SCA information means that we have to now add these parameters as
