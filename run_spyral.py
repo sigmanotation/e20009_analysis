@@ -22,8 +22,8 @@ import multiprocessing
 
 #########################################################################################################
 # Set up workspace and trace paths
-workspace_path = Path("/Volumes/e20009/test_pulser")
-trace_path = Path("/Volumes/e20009/pulser_h5")
+workspace_path = Path("D:\\test_pulser")
+trace_path = Path("D:\\pulser_h5")
 
 # Make directory to store beam events
 if not workspace_path.exists():
@@ -32,20 +32,20 @@ beam_events_folder = workspace_path / "beam_events"
 if not beam_events_folder.exists():
     beam_events_folder.mkdir()
 
-run_min = 378
-run_max = 380
-n_processes = 3
+run_min = 372
+run_max = 376
+n_processes = 5
 
 #########################################################################################################
 # Define configuration
 pad_params = PadParameters(
     is_default=False,
-    is_default_legacy=True,
+    is_default_legacy=False,
     pad_geometry_path=Path(
         "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\pad_geometry_legacy.csv"
     ),
     pad_time_path=Path(
-        "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\pad_time_correction.csv"
+        "C:\\Users\\zachs\\Desktop\\pad_time_correction.csv"
     ),
     pad_electronics_path=Path(
         "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\pad_electronics_legacy.csv"
@@ -79,11 +79,11 @@ det_params = DetectorParameters(
     detector_length=1000.0,
     beam_region_radius=20.0,
     drift_velocity_path=Path(
-        "/Users/attpc/Desktop/e20009_analysis/e20009_analysis/e20009_parameters/drift_velocity.csv"
+        "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\drift_velocity.csv"
     ),
     get_frequency=3.125,
     garfield_file_path=Path(
-        "/Users/attpc/Desktop/e20009_analysis/e20009_analysis/e20009_parameters/e20009_efield_correction.txt"
+        "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\e20009_efield_correction.txt"
     ),
     do_garfield_correction=False,
 )
@@ -104,12 +104,12 @@ estimate_params = EstimateParameters(
 
 solver_params = SolverParameters(
     gas_data_path=Path(
-        "/Users/attpc/Desktop/e20009_analysis/e20009_analysis/e20009_parameters/e20009_target.json"
+        "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\e20009_target.json"
     ),
     gain_match_factors_path=Path(
-        "/Users/attpc/Desktop/e20009_analysis/e20009_analysis/e20009_parameters/gain_match_factors.csv"
+        "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\gain_match_factors_new_tc.csv"
     ),
-    particle_id_filename=Path("C:\\Users\\zachs\\Desktop\\wkspc\\proton_pid.json"),
+    particle_id_filename=Path("D:\\e20009_new_tc\\proton_pid.json"),
     ic_min_val=450.0,
     ic_max_val=850.0,
     n_time_steps=1000,
