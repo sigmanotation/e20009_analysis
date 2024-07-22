@@ -5,12 +5,14 @@ from spyral import (
     ClusterParameters,
     EstimateParameters,
     PadParameters,
+    DEFAULT_LEGACY_MAP,
 )
 
 from e20009_phases.PointcloudLegacyPhase import PointcloudLegacyPhase
 from e20009_phases.ClusterPhase import ClusterPhase
 from e20009_phases.EstimationPhase import EstimationPhase
 from e20009_phases.InterpSolverPhase import InterpSolverPhase
+from e20009_phases.InterpLeastSqSolverPhase import InterpLeastSqSolverPhase
 from e20009_phases.config import (
     ICParameters,
     DetectorParameters,
@@ -22,8 +24,8 @@ import multiprocessing
 
 #########################################################################################################
 # Set up workspace and trace paths
-workspace_path = Path("D:\\test_pulser")
-trace_path = Path("D:\\pulser_h5")
+workspace_path = Path("D:\\e20009_all_new")
+trace_path = Path("D:\\h5")
 
 # Make directory to store beam events
 if not workspace_path.exists():
@@ -32,20 +34,18 @@ beam_events_folder = workspace_path / "beam_events"
 if not beam_events_folder.exists():
     beam_events_folder.mkdir()
 
-run_min = 372
-run_max = 376
-n_processes = 5
+run_min = 108
+run_max = 366
+n_processes = 9
 
 #########################################################################################################
 # Define configuration
 pad_params = PadParameters(
-    is_default=False,
-    is_default_legacy=False,
     pad_geometry_path=Path(
         "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\pad_geometry_legacy.csv"
     ),
     pad_time_path=Path(
-        "C:\\Users\\zachs\\Desktop\\pad_time_correction.csv"
+        "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\pad_time_correction.csv"
     ),
     pad_electronics_path=Path(
         "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\pad_electronics_legacy.csv"
@@ -85,7 +85,7 @@ det_params = DetectorParameters(
     garfield_file_path=Path(
         "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\e20009_efield_correction.txt"
     ),
-    do_garfield_correction=False,
+    do_garfield_correction=True,
 )
 
 cluster_params = ClusterParameters(
@@ -94,7 +94,8 @@ cluster_params = ClusterParameters(
     min_size_scale_factor=0.05,
     min_size_lower_cutoff=10,
     cluster_selection_epsilon=10.0,
-    circle_overlap_ratio=0.5,
+    min_cluster_size_join=15,
+    circle_overlap_ratio=0.25,
     outlier_scale_factor=0.05,
 )
 
@@ -107,18 +108,18 @@ solver_params = SolverParameters(
         "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\e20009_target.json"
     ),
     gain_match_factors_path=Path(
-        "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\gain_match_factors_new_tc.csv"
+        "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\gain_match_factors_new.csv"
     ),
-    particle_id_filename=Path("D:\\e20009_new_tc\\proton_pid.json"),
+    particle_id_filename=Path("D:\\e20009_all_new\\proton_pid.json"),
     ic_min_val=450.0,
     ic_max_val=850.0,
-    n_time_steps=1000,
-    interp_ke_min=0.1,
+    n_time_steps=1300,
+    interp_ke_min=0.01,
     interp_ke_max=40.0,
-    interp_ke_bins=200,
+    interp_ke_bins=800,
     interp_polar_min=0.1,
     interp_polar_max=179.9,
-    interp_polar_bins=340,
+    interp_polar_bins=500,
 )
 
 #########################################################################################################
@@ -138,7 +139,7 @@ pipe = Pipeline(
         EstimationPhase(estimate_params, det_params),
         InterpSolverPhase(solver_params, det_params),
     ],
-    [True, False, False, False],
+    [False, False, False, True],
     workspace_path,
     trace_path,
 )

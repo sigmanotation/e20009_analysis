@@ -10,11 +10,12 @@ from spyral.core.track_generator import (
 )
 from spyral.core.constants import QBRHO_2_P, BIG_PAD_HEIGHT
 from spyral.core.estimator import Direction
-from spyral.interpolate.track_interpolator import create_interpolator_from_array, TrackInterpolator
+from spyral.interpolate.track_interpolator import (
+    create_interpolator_from_array, TrackInterpolator
+)
 from spyral.solvers.guess import Guess
-from spyral.solvers.solver_interp import solve_physics_interp, create_params, objective_function
+from spyral.solvers.solver_interp_leastsq import solve_physics_interp, create_params, objective_function
 from spyral.phases.schema import ESTIMATE_SCHEMA, INTERP_SOLVER_SCHEMA
-from spyral.phases.interp_solver_phase import form_physics_file_name
 
 # Import e20009 specific data classes
 from e20009_phases.config import SolverParameters, DetectorParameters
@@ -22,8 +23,8 @@ from e20009_phases.config import SolverParameters, DetectorParameters
 from spyral_utils.nuclear.target import load_target, GasTarget
 from spyral_utils.nuclear.particle_id import deserialize_particle_id, ParticleID
 from spyral_utils.nuclear.nuclear_map import NuclearDataMap
-from spyral_utils.nuclear import NucleusData
 from spyral_utils.plot import Cut2D
+from spyral_utils.nuclear import NucleusData
 import h5py as h5
 import polars as pl
 from pathlib import Path
@@ -37,12 +38,12 @@ from multiprocessing.managers import SharedMemoryManager
 
 """
 Changes from attpc_spyral package base code (circa July 19, 2024):
-    - InterpSolverPhase run method pulls gain-match factor for the run being analyzed from the specified file 
+    - InterpLeastSqSolverPhase run method pulls gain-match factor for the run being analyzed from the specified file 
       and applies it. The estimates_gated dataframe now has additional gates to only select events with the 
       correct IC and IC SCA information. StatusMessage now takes self.name as first argument instead of "Interp. Solver".
       Run method also pulls in window and micromegas time buckets and feeds them to solve_physics_interp() for
       errors to the fit.
-    - solve_physics_interp() function from solver_interp.py edited to take in window and micromegas time
+    - solve_physics_interp() function from solver_interp_leastsq.py edited to take in window and micromegas time
       buckets directly.
 """
 
@@ -50,7 +51,7 @@ DEFAULT_PID_XAXIS = "dEdx"
 DEFAULT_PID_YAXIS = "brho"
 
 
-class InterpSolverError(Exception):
+class InterpLeastSqSolverError(Exception):
     pass
 
 
@@ -75,7 +76,7 @@ def form_physics_file_name(run_number: int, particle: ParticleID) -> str:
     return f"{form_run_string(run_number)}_{particle.nucleus.isotopic_symbol}.parquet"
 
 
-class InterpSolverPhase(PhaseLike):
+class InterpLeastSqSolverPhase(PhaseLike):
     """The default Spyral solver phase, inheriting from PhaseLike
 
     The goal of the solver phase is to get exact (or as exact as possible) values
@@ -105,7 +106,7 @@ class InterpSolverPhase(PhaseLike):
 
     def __init__(self, solver_params: SolverParameters, det_params: DetectorParameters):
         super().__init__(
-            "InterpSolver",
+            "InterpLeastSqSolver",
             incoming_schema=None,
             outgoing_schema=None,
         )
@@ -123,11 +124,11 @@ class InterpSolverPhase(PhaseLike):
             Path(self.solver_params.particle_id_filename), self.nuclear_map
         )
         if pid is None:
-            raise InterpSolverError(
+            raise InterpLeastSqSolverError(
                 "Could not create trajectory mesh, particle ID is not formatted correctly!"
             )
         if not isinstance(target, GasTarget):
-            raise InterpSolverError(
+            raise InterpLeastSqSolverError(
                 "Could not create trajectory mesh, target is not a GasTarget!"
             )
         mesh_params = MeshParameters(
@@ -466,8 +467,8 @@ def solve_physics_interp(
     # uncertainty due to pad size, treat as box
     xy_error = cluster.data[:, 4] * BIG_PAD_HEIGHT * 0.5
     # total positional variance per point
-    total_var = 2.0 * (xy_error**2.0) + z_error**2.0
-    weights = 1.0 / total_var
+    total_error = np.sqrt(2.0 * (xy_error**2.0) + z_error**2.0)
+    weights = 1.0 / total_error
 
     fit_params = create_params(guess, ejectile, interpolator, det_params)
 
@@ -475,10 +476,12 @@ def solve_physics_interp(
         objective_function,
         fit_params,
         args=(traj_data, weights, interpolator, ejectile),
-        method="lbfgsb",
+        method="leastsq",
     )
 
-    p = best_fit.params["brho"].value * QBRHO_2_P * ejectile.Z  # type: ignore
+    scale_factor = QBRHO_2_P * float(ejectile.Z)
+    brho: float = best_fit.params["brho"].value  # type: ignore
+    p = brho * scale_factor  # type: ignore
     ke = np.sqrt(p**2.0 + ejectile.mass**2.0) - ejectile.mass
 
     results["event"].append(cluster.event)
@@ -494,14 +497,31 @@ def solve_physics_interp(
     results["azimuthal"].append(best_fit.params["azimuthal"].value)  # type: ignore
     results["redchisq"].append(best_fit.redchi)
 
-    # This method cannot quantify uncertainties
-    results["sigma_vx"].append(1.0e6)
-    results["sigma_vy"].append(1.0e6)
-    results["sigma_vz"].append(1.0e6)
-    results["sigma_brho"].append(1.0e6)
-    results["sigma_ke"].append(1.0e6)
-    results["sigma_polar"].append(1.0e6)
-    results["sigma_azimuthal"].append(1.0e6)
+    if hasattr(best_fit, "uvars"):
+        results["sigma_vx"].append(best_fit.uvars["vertex_x"].std_dev)  # type: ignore
+        results["sigma_vy"].append(best_fit.uvars["vertex_y"].std_dev)  # type: ignore
+        results["sigma_vz"].append(best_fit.uvars["vertex_z"].std_dev)  # type: ignore
+        results["sigma_brho"].append(best_fit.uvars["brho"].std_dev)  # type: ignore
+
+        # sigma_f = sqrt((df/dx)^2*sigma_x^2 + ...)
+        ke_std_dev = np.fabs(
+            scale_factor**2.0
+            * brho
+            / np.sqrt((brho * scale_factor) ** 2.0 + ejectile.mass**2.0)
+            * best_fit.uvars["brho"].std_dev  # type: ignore
+        )
+        results["sigma_ke"].append(ke_std_dev)
+
+        results["sigma_polar"].append(best_fit.uvars["polar"].std_dev)  # type: ignore
+        results["sigma_azimuthal"].append(best_fit.uvars["azimuthal"].std_dev)  # type: ignore
+    else:
+        results["sigma_vx"].append(1.0e6)
+        results["sigma_vy"].append(1.0e6)
+        results["sigma_vz"].append(1.0e6)
+        results["sigma_brho"].append(1.0e6)
+        results["sigma_ke"].append(1.0e6)
+        results["sigma_polar"].append(1.0e6)
+        results["sigma_azimuthal"].append(1.0e6)
 
 # For testing, not for use in production
 def fit_model_interp(
@@ -547,9 +567,9 @@ def fit_model_interp(
     ) * 0.5
     # uncertainty due to pad size, treat as box
     xy_error = cluster.data[:, 4] * BIG_PAD_HEIGHT * 0.5
-    # total positional variance per point
-    total_var = 2.0 * (xy_error**2.0) + z_error**2.0
-    weights = 1.0 / total_var
+    # total positional error per point
+    total_error = np.sqrt(2.0 * (xy_error**2.0) + z_error**2.0)
+    weights = 1.0 / total_error
 
     fit_params = create_params(guess, ejectile, interpolator, det_params)
 
@@ -557,7 +577,7 @@ def fit_model_interp(
         objective_function,
         fit_params,
         args=(traj_data, weights, interpolator, ejectile),
-        method="lbfgsb",
+        method="leastsq",
     )
     print(fit_report(result))
 

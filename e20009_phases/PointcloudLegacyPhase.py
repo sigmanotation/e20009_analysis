@@ -23,6 +23,7 @@ from spyral.trace.get_legacy_event import (
     GET_DATA_TRACE_STOP,
 )
 from spyral.trace.get_event import GetEvent
+from spyral.trace.get_trace import GetTraceError
 from spyral.trace.peak import Peak
 from spyral.interpolate import BilinearInterpolator
 from spyral.phases.schema import TRACE_SCHEMA, POINTCLOUD_SCHEMA
@@ -42,7 +43,7 @@ from multiprocessing import SimpleQueue
 from contourpy import contour_generator
 
 """
-Changes from attpc_spyral package base code (circa June 1, 2024):
+Changes from attpc_spyral package base code (circa July 19, 2024):
     - PointcloudLegacyPhase takes modified config classes found in the config.py file. These include
       the ICParameters class (called FRIBParameters in the attpc_spyral package) and modified 
       DetectorParameters and PadParameters. See that file for more information on their attributes.
@@ -104,8 +105,8 @@ class PointcloudLegacyPhase(PhaseLike):
     ):
         super().__init__(
             "PointcloudLegacy",
-            incoming_schema=TRACE_SCHEMA,
-            outgoing_schema=POINTCLOUD_SCHEMA,
+            incoming_schema=None,
+            outgoing_schema=None,
         )
         self.get_params = get_params
         self.ic_params = ic_params
@@ -234,10 +235,11 @@ class PointcloudLegacyPhase(PhaseLike):
                 msg_queue.put(msg)
 
             event_data: h5.Dataset
-            try:
-                event_data = event_group[f"evt{idx}_data"]  # type: ignore
-            except Exception:
+            event_name = f"evt{idx}_data"
+            if event_name not in event_group:
                 continue
+            else:
+                event_data = event_group[event_name]  # type: ignore
 
             event = GetLegacyEvent(
                 event_data, idx, self.get_params, self.ic_params, rng
@@ -540,10 +542,9 @@ class GetTrace:
         """
         data_shape = np.shape(data)
         if data_shape[0] != NUMBER_OF_TIME_BUCKETS:
-            print(
+            raise GetTraceError(
                 f"GetTrace was given data that did not have the correct shape! Expected 512 time buckets, instead got {data_shape[0]}"
             )
-            return
 
         self.trace = data.astype(np.int32)  # Widen the type and sign it
         self.hw_id = id
@@ -868,8 +869,8 @@ def generate_electron_correction(
 
     # Use average window and micromegas time buckets from all runs in the drift velocity file
     dv_df: pl.DataFrame = pl.read_csv(params.drift_velocity_path)
-    w_tb = int(dv_df.select(pl.mean("average_window_tb"))[0, 0])
-    mm_tb = int(dv_df.select(pl.mean("average_micromegas_tb"))[0, 0])
+    w_tb_avg = dv_df.select(pl.mean("average_window_tb"))[0, 0]
+    mm_tb_avg = dv_df.select(pl.mean("average_micromegas_tb"))[0, 0]
 
     garfield_data: np.ndarray = np.loadtxt(garf_file_path, dtype=float)
 
@@ -912,7 +913,7 @@ def generate_electron_correction(
         mid_val = chunk[chunk_midpoint_index, 2]
         chunk[:, 2] -= mid_val
         chunk[:, 2] *= (
-            params.detector_length / (w_tb - mm_tb) * params.get_frequency * 0.001
+            params.detector_length / (w_tb_avg - mm_tb_avg) * params.get_frequency * 0.001
         )
 
     interp = BilinearInterpolator(
