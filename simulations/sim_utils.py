@@ -10,7 +10,7 @@ import numpy as np
 
 class SpyralWriter_e20009:
     """
-    Writer for Spyral e20009 analysis. Writes the simulated data into multiple
+    Writer for e20009 Spyral analysis. Writes the simulated data into multiple
     files to take advantage of Spyral's multiprocessing.
 
     Parameters
@@ -87,10 +87,11 @@ class SpyralWriter_e20009:
             Event number of simulated event from the kinematics file.
         """
         # If current file is too large, make a new one
-        if self.file_path.stat().st_size >= self.max_file_size:
-            self.set_number_of_events()
-            self.file.close()
+        if self.file_path.stat().st_size > self.max_file_size:
+            self.close()
             self.create_file()
+            self.event_number_low = event_number
+            self.event_number_high = event_number
 
         if config.pad_centers is None:
             raise ValueError("Pad centers are not assigned at write!")
@@ -120,8 +121,6 @@ class SpyralWriter_e20009:
         dset.attrs["ic_sca_centroid"] = -1.0
         dset.attrs["ic_sca_multiplicity"] = -1.0
 
-        dset.flush()
-
     def set_number_of_events(self) -> None:
         """
         Writes the first and last written events as attributes to the current
@@ -129,7 +128,6 @@ class SpyralWriter_e20009:
         """
         self.cloud_group.attrs["min_event"] = self.event_number_low
         self.cloud_group.attrs["max_event"] = self.event_number_high
-        self.event_number_low = self.event_number_high
 
     def get_directory_name(self) -> Path:
         """
