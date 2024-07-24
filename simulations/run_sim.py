@@ -26,7 +26,7 @@ import numpy as np
 
 # Set output file paths for simulated kinematic events and point clouds
 kine_path = Path("/Volumes/e20009_sim/1.78_breit_wig_0-60/1.78_mev_kine.h5")
-det_path = Path("/Users/attpc/Desktop/")
+det_path = Path("/Volumes/e20009_sim/3.4_breit_wig_0-60")
 
 target = GasTarget(
     TargetData(compound=[(1, 2, 2)], pressure=600.0, thickness=None), nuclear_map
@@ -74,8 +74,8 @@ pipeline = KinematicsPipeline(
     [
         ExcitationBreitWigner(
             rest_mass=nuclear_map.get_data(4, 11).mass,
-            centroid=1.78,
-            width=0.100,
+            centroid=3.4,
+            width=0.122,
         )
     ],
     [PolarUniform(angle_min=(2 * np.pi / 3), angle_max=np.pi)],
@@ -108,7 +108,7 @@ electronics = ElectronicsParams(
 pads = PadParams()
 
 config = Config(detector, electronics, pads)
-writer = SpyralWriter_e20009(det_path, config)
+writer = SpyralWriter_e20009(det_path, config, max_file_size=1e9)
 
 
 def main():
