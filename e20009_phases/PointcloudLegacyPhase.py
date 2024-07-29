@@ -43,17 +43,16 @@ from multiprocessing import SimpleQueue
 from contourpy import contour_generator
 
 """
-Changes from attpc_spyral package base code (circa July 19, 2024):
+Changes from attpc_spyral package base code (circa July 29, 2024):
     - PointcloudLegacyPhase takes modified config classes found in the config.py file. These include
       the ICParameters class (called FRIBParameters in the attpc_spyral package) and modified 
-      DetectorParameters and PadParameters. See that file for more information on their attributes.
+      DetectorParameters. See that file for more information on their attributes.
     - generate_electron_correction uses the average window and micromegas time buckets calculated from 
       all runs in the drift velocity file.
     - PointcloudLegacyPhase run method now takes the window and micromegas time buckets to calculate
       the drift velocity from the indicated file in DetectorParameters. It adds IC SCA information as
       attributes to the output HDF5 file. It also writes information related to the IC and IC SCA traces
-      to a parquet file in the workspace. Fixed small bug with nevents number being incorrect; 1 was added
-      to it.
+      to a parquet file in the workspace.
     - GetLegacyEvent load_traces method extracts IC SCA and downscale beam traces.
     - GetTrace find_peaks method takes a new parameter called min_width. The floor is now taken for both 
       inflection points.

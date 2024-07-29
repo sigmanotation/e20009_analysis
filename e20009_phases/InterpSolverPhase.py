@@ -36,14 +36,14 @@ from multiprocessing.shared_memory import SharedMemory
 from multiprocessing.managers import SharedMemoryManager
 
 """
-Changes from attpc_spyral package base code (circa July 19, 2024):
+Changes from attpc_spyral package base code (circa July 29, 2024):
     - InterpSolverPhase run method pulls gain-match factor for the run being analyzed from the specified file 
       and applies it. The estimates_gated dataframe now has additional gates to only select events with the 
       correct IC and IC SCA information. StatusMessage now takes self.name as first argument instead of "Interp. Solver".
       Run method also pulls in window and micromegas time buckets and feeds them to solve_physics_interp() for
       errors to the fit.
-    - solve_physics_interp() function from solver_interp.py edited to take in window and micromegas time
-      buckets directly.
+    - solve_physics_interp() function from solver_interp.py edited to take in window and micromegas timebuckets 
+      directly.
 """
 
 DEFAULT_PID_XAXIS = "dEdx"
@@ -164,17 +164,19 @@ class InterpSolverPhase(PhaseLike):
         # Note that we don't have a lock on the shared memory as the mesh is
         # used read-only
         mesh_data: np.ndarray = np.load(self.track_path)
-        self.buffer = manager.SharedMemory(mesh_data.nbytes)
+        self.memory = manager.SharedMemory(
+            mesh_data.nbytes
+        )  # Stored as class member for windows reasons, simply a keep-alive
         spyral_info(
             __name__,
             f"Allocated {mesh_data.nbytes * 1.0e-9:.2} GB of memory for shared mesh.",
         )
         memory_array = np.ndarray(
-            mesh_data.shape, dtype=mesh_data.dtype, buffer=self.buffer.buf
+            mesh_data.shape, dtype=mesh_data.dtype, buffer=self.memory.buf
         )
         memory_array[:, :, :, :] = mesh_data[:, :, :, :]
         # The name allows us to access later, shape and dtype are for casting to numpy
-        self.shared_mesh_name = self.buffer.name
+        self.shared_mesh_name = self.memory.name
         self.shared_mesh_shape = memory_array.shape
         self.shared_mesh_type = memory_array.dtype
 

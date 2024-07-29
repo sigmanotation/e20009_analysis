@@ -1,6 +1,14 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+"""
+Changes from attpc_spyral package base code (circa July 29, 2024):
+    - FribParameters class removed and renamed to ICParameters. All ic parameters of
+      that class were removed and replaced with low_accept and high_accept.
+    - DetectorParameters class had window and micromegas timebucket parameters removed
+      and instead are replaced by the single parameter drift_velocity_path.
+    - SolverParameters class has new parameter gain_match_factors_path.
+"""
 
 @dataclass
 class ICParameters:

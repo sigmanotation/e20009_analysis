@@ -22,12 +22,10 @@ from spyral.geometry.circle import generate_circle_points, least_squares_circle
 import numpy as np
 import math
 from scipy.stats import linregress
-from enum import Enum
 
 """
-Changes from attpc_spyral package base code (circa July 19, 2024):
-    - EstimationPhase run method had small bug with nevents number being incorrect fixed; 1 was added
-      to it. Estimation results now includes IC SCA information written to the output parquet file. 
+Changes from attpc_spyral package base code (circa July 29, 2024):
+    - Estimation results now includes IC SCA information written to the output parquet file. 
       Including the IC SCA information means that we have to now add these parameters as
       inputs to all the functions downstream of it.
     - estimatephysics function now takes IC SCA information.
@@ -148,7 +146,7 @@ class EstimationPhase(PhaseLike):
             "azimuthal": [],
             "brho": [],
             "dEdx": [],
-            "log_dEdx": [],
+            "sqrt_dEdx": [],
             "dE": [],
             "arclength": [],
             "direction": [],
@@ -485,10 +483,7 @@ def estimate_physics_pass(
     results["azimuthal"].append(azimuthal)
     results["brho"].append(brho)
     results["dEdx"].append(dEdx)
-    if dEdx != 0.0:
-        results["log_dEdx"].append(np.log(dEdx))
-    else:
-        results["log_dEdx"].append(0.0)
+    results["sqrt_dEdx"].append(np.sqrt(np.fabs(dEdx)))
     results["dE"].append(charge_deposited)
     results["arclength"].append(arclength)
     results["direction"].append(direction.value)
