@@ -480,9 +480,11 @@ def solve_physics_interp(
         return
 
     # Uncertainty due to TB resolution and drift velocity edges in meters
-    z_error = np.sqrt(
-        ((det_params.detector_length / float(w_tb - mm_tb) ** 2.0) * 0.001 * 0.5) ** 2.0
-        * (w_err**2.0 + mm_err**2.0)
+    z_error = (
+        (det_params.detector_length / float(w_tb - mm_tb) ** 2.0)
+        * 0.001
+        * 0.5
+        * np.sqrt(w_err**2.0 + mm_err**2.0)
     )
     # uncertainty due to pad size, treat as rectangle
     x_error = cluster.data[:, 4] * BIG_PAD_HEIGHT * 0.5
