@@ -43,7 +43,7 @@ from multiprocessing.shared_memory import SharedMemory
 from multiprocessing.managers import SharedMemoryManager
 
 """
-Changes from attpc_spyral package base code (circa July 29, 2024):
+Changes from attpc_spyral package base code (circa July 30, 2024):
     - InterpSolverPhase run method pulls gain-match factor for the run being analyzed from the specified file 
       and applies it. The estimates_gated dataframe now has additional gates to only select events with the 
       correct IC and IC SCA information. StatusMessage now takes self.name as first argument instead of "Interp. Solver".

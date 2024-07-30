@@ -42,7 +42,7 @@ from multiprocessing.shared_memory import SharedMemory
 from multiprocessing.managers import SharedMemoryManager
 
 """
-Changes from attpc_spyral package base code (circa July 29, 2024):
+Changes from attpc_spyral package base code (circa July 30, 2024):
     - InterpLeastSqSolverPhase run method pulls gain-match factor for the run being analyzed from the specified file 
       and applies it. The estimates_gated dataframe now has additional gates to only select events with the 
       correct IC and IC SCA information. StatusMessage now takes self.name as first argument instead of "Interp. Solver".
@@ -484,7 +484,7 @@ def solve_physics_interp(
         ((det_params.detector_length / float(w_tb - mm_tb) ** 2.0) * 0.001 * 0.5) ** 2.0
         * (w_err**2.0 + mm_err**2.0)
     )
-    # uncertainty due to pad size, treat as box
+    # uncertainty due to pad size, treat as rectangle
     x_error = cluster.data[:, 4] * BIG_PAD_HEIGHT * 0.5
     y_error = cluster.data[:, 4] * BIG_PAD_HEIGHT * 0.5 * np.sqrt(3) / 2
     # total positional variance per point
