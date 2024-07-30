@@ -50,9 +50,8 @@ Changes from attpc_spyral package base code (circa July 30, 2024):
       Run method also pulls in window and micromegas time buckets and feeds them to solve_physics_interp() for
       errors to the fit.
     - solve_physics_interp() function from solver_interp.py edited to take in window and micromegas timebuckets 
-      directly as well as their errors. The z position error now uses the error in the found window and 
-      micromegas time buckets. The x and y errors are split up as the triangular pads are circumscribed by a 
-      rectangle not a triangle.
+      directly. The x and y errors are split up as the triangular pads are circumscribed by a 
+      rectangle not a triangle. Removed the float when taking difference of two edges in z error.
 """
 
 DEFAULT_PID_XAXIS = "dEdx"
@@ -317,8 +316,6 @@ class InterpSolverPhase(PhaseLike):
             return PhaseResult.invalid_result(payload.run_number)
         mm_tb: float = dv_df.get_column("average_micromegas_tb")[0]
         w_tb: float = dv_df.get_column("average_window_tb")[0]
-        mm_err: float = dv_df.get_column("average_micromegas_tb_error")[0]
-        w_err: float = dv_df.get_column("average_window_tb_error")[0]
 
         # Select the particle group data, beam region of ic, convert to dictionary for row-wise operations
         estimates_gated = (
@@ -428,8 +425,6 @@ class InterpSolverPhase(PhaseLike):
                 self.det_params,
                 w_tb,
                 mm_tb,
-                w_err,
-                mm_err,
                 phys_results,
             )
 
@@ -449,8 +444,6 @@ def solve_physics_interp(
     det_params: DetectorParameters,
     w_tb: float,
     mm_tb: float,
-    w_err: float,
-    mm_err: float,
     results: dict[str, list],
 ):
     """High level function to be called from the application.
@@ -481,12 +474,8 @@ def solve_physics_interp(
         return
 
     # Uncertainty due to TB resolution and drift velocity edges in meters
-    z_error = (
-        (det_params.detector_length / float(w_tb - mm_tb) ** 2.0)
-        * 0.001
-        * 0.5
-        * np.sqrt(w_err**2.0 + mm_err**2.0)
-    )
+    # Uncertainty due to TB resolution in meters
+    z_error = (det_params.detector_length / (w_tb - mm_tb) * 0.001) * 0.5
     # uncertainty due to pad size, treat as rectangle
     x_error = cluster.data[:, 4] * BIG_PAD_HEIGHT * 0.5
     y_error = cluster.data[:, 4] * BIG_PAD_HEIGHT * 0.5 * np.sqrt(3) / 2
