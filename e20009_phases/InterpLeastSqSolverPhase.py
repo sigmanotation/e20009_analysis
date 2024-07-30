@@ -11,10 +11,15 @@ from spyral.core.track_generator import (
 from spyral.core.constants import QBRHO_2_P, BIG_PAD_HEIGHT
 from spyral.core.estimator import Direction
 from spyral.interpolate.track_interpolator import (
-    create_interpolator_from_array, TrackInterpolator
+    create_interpolator_from_array,
+    TrackInterpolator,
 )
 from spyral.solvers.guess import Guess
-from spyral.solvers.solver_interp_leastsq import solve_physics_interp, create_params, objective_function
+from spyral.solvers.solver_interp_leastsq import (
+    solve_physics_interp,
+    create_params,
+    objective_function,
+)
 from spyral.phases.schema import ESTIMATE_SCHEMA, INTERP_SOLVER_SCHEMA
 
 # Import e20009 specific data classes
@@ -44,7 +49,9 @@ Changes from attpc_spyral package base code (circa July 29, 2024):
       Run method also pulls in window and micromegas time buckets and feeds them to solve_physics_interp() for
       errors to the fit.
     - solve_physics_interp() function from solver_interp_leastsq.py edited to take in window and micromegas time
-      buckets directly.
+      buckets directly as well as their errors. The z position error now uses the error in the found window and 
+      micromegas time buckets. The x and y errors are split up as the triangular pads are circumscribed by a 
+      rectangle not a triangle.
 """
 
 DEFAULT_PID_XAXIS = "dEdx"
@@ -283,7 +290,12 @@ class InterpLeastSqSolverPhase(PhaseLike):
         pid_vertices_matched: list[tuple[float, float]] = [
             (point[0] / gain_factor, point[1]) for point in pid_vertices
         ]
-        pid.cut = Cut2D(pid.cut.name, pid_vertices_matched, pid.cut.get_x_axis(), pid.cut.get_y_axis())
+        pid.cut = Cut2D(
+            pid.cut.name,
+            pid_vertices_matched,
+            pid.cut.get_x_axis(),
+            pid.cut.get_y_axis(),
+        )
 
         # Load drift velocity information
         dv_lf: pl.LazyFrame = pl.scan_csv(self.det_params.drift_velocity_path)
@@ -304,6 +316,8 @@ class InterpLeastSqSolverPhase(PhaseLike):
             return PhaseResult.invalid_result(payload.run_number)
         mm_tb: float = dv_df.get_column("average_micromegas_tb")[0]
         w_tb: float = dv_df.get_column("average_window_tb")[0]
+        mm_err: float = dv_df.get_column("average_micromegas_tb_error")[0]
+        w_err: float = dv_df.get_column("average_window_tb_error")[0]
 
         # Select the particle group data, beam region of ic, convert to dictionary for row-wise operations
         estimates_gated = (
@@ -413,6 +427,8 @@ class InterpLeastSqSolverPhase(PhaseLike):
                 self.det_params,
                 w_tb,
                 mm_tb,
+                w_err,
+                mm_err,
                 phys_results,
             )
 
@@ -421,6 +437,7 @@ class InterpLeastSqSolverPhase(PhaseLike):
         physics_df.write_parquet(result.artifact_path)
         spyral_info(__name__, "Phase 4 complete.")
         return result
+
 
 def solve_physics_interp(
     cluster_index: int,
@@ -431,6 +448,8 @@ def solve_physics_interp(
     det_params: DetectorParameters,
     w_tb: float,
     mm_tb: float,
+    w_err: float,
+    mm_err: float,
     results: dict[str, list],
 ):
     """High level function to be called from the application.
@@ -460,16 +479,16 @@ def solve_physics_interp(
     if not interpolator.check_values_in_range(kinetic_energy, guess.polar):
         return
 
-    # Uncertainty due to TB resolution in meters
-    z_error = (
-        det_params.detector_length
-        / float(w_tb - mm_tb)
-        * 0.001
-    ) * 0.5
+    # Uncertainty due to TB resolution and drift velocity edges in meters
+    z_error = np.sqrt(
+        ((det_params.detector_length / float(w_tb - mm_tb) ** 2.0) * 0.001 * 0.5) ** 2.0
+        * (w_err**2.0 + mm_err**2.0)
+    )
     # uncertainty due to pad size, treat as box
-    xy_error = cluster.data[:, 4] * BIG_PAD_HEIGHT * 0.5
+    x_error = cluster.data[:, 4] * BIG_PAD_HEIGHT * 0.5
+    y_error = cluster.data[:, 4] * BIG_PAD_HEIGHT * 0.5 * np.sqrt(3) / 2
     # total positional variance per point
-    total_error = np.sqrt(2.0 * (xy_error**2.0) + z_error**2.0)
+    total_error = np.sqrt(x_error**2.0 + y_error**2.0 + z_error**2.0)
     weights = 1.0 / total_error
 
     fit_params = create_params(guess, ejectile, interpolator, det_params)
@@ -525,6 +544,7 @@ def solve_physics_interp(
         results["sigma_polar"].append(1.0e6)
         results["sigma_azimuthal"].append(1.0e6)
 
+
 # For testing, not for use in production
 def fit_model_interp(
     cluster: Cluster,
@@ -562,11 +582,7 @@ def fit_model_interp(
         return None
 
     # Uncertainty due to TB resolution in meters
-    z_error = (
-        det_params.detector_length
-        / float(w_tb - mm_tb)
-        * 0.001
-    ) * 0.5
+    z_error = (det_params.detector_length / float(w_tb - mm_tb) * 0.001) * 0.5
     # uncertainty due to pad size, treat as box
     xy_error = cluster.data[:, 4] * BIG_PAD_HEIGHT * 0.5
     # total positional error per point
