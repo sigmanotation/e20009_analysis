@@ -43,15 +43,16 @@ from multiprocessing.shared_memory import SharedMemory
 from multiprocessing.managers import SharedMemoryManager
 
 """
-Changes from attpc_spyral package base code (circa July 30, 2024):
+Changes from attpc_spyral package base code (circa July 31, 2024):
     - InterpSolverPhase run method pulls gain-match factor for the run being analyzed from the specified file 
       and applies it. The estimates_gated dataframe now has additional gates to only select events with the 
       correct IC and IC SCA information. StatusMessage now takes self.name as first argument instead of "Interp. Solver".
       Run method also pulls in window and micromegas time buckets and feeds them to solve_physics_interp() for
       errors to the fit.
     - solve_physics_interp() function from solver_interp.py edited to take in window and micromegas timebuckets 
-      directly. The x and y errors are split up as the triangular pads are circumscribed by a 
-      rectangle not a triangle. Removed the float when taking difference of two edges in z error.
+      directly and their errors. The x and y errors are split up as the triangular pads are circumscribed by a 
+      rectangle not a square. The z error is fully propagated with errors from time bucket edges. Removed the 
+      float when taking difference of two edges in z error.
 """
 
 DEFAULT_PID_XAXIS = "dEdx"
@@ -316,6 +317,8 @@ class InterpSolverPhase(PhaseLike):
             return PhaseResult.invalid_result(payload.run_number)
         mm_tb: float = dv_df.get_column("average_micromegas_tb")[0]
         w_tb: float = dv_df.get_column("average_window_tb")[0]
+        mm_err: float = dv_df.get_column("average_micromegas_tb_error")[0]
+        w_err: float = dv_df.get_column("average_window_tb_error")[0]
 
         # Select the particle group data, beam region of ic, convert to dictionary for row-wise operations
         estimates_gated = (
@@ -425,6 +428,8 @@ class InterpSolverPhase(PhaseLike):
                 self.det_params,
                 w_tb,
                 mm_tb,
+                w_err,
+                mm_err,
                 phys_results,
             )
 
@@ -444,6 +449,8 @@ def solve_physics_interp(
     det_params: DetectorParameters,
     w_tb: float,
     mm_tb: float,
+    w_err: float,
+    mm_err: float,
     results: dict[str, list],
 ):
     """High level function to be called from the application.
@@ -464,6 +471,14 @@ def solve_physics_interp(
         the interpolation scheme to be used
     det_params: DetectorParameters
         Configuration parameters for detector characteristics
+    w_tb: float
+        Window time bucket
+    mm_tb: float
+        Micromegas time bucket
+    w_err: float
+        Window time bucket error
+    mm_err: float
+        Micromegas time bucket error
     results: dict[str, list]
         storage for results from the fitting, which will later be written as a dataframe.
     """
@@ -473,9 +488,14 @@ def solve_physics_interp(
     if not interpolator.check_values_in_range(kinetic_energy, guess.polar):
         return
 
-    # Uncertainty due to TB resolution and drift velocity edges in meters
-    # Uncertainty due to TB resolution in meters
-    z_error = (det_params.detector_length / (w_tb - mm_tb) * 0.001) * 0.5
+    # Uncertainty due to z-position reconstruction
+    dv = det_params.detector_length / (w_tb - mm_tb) * 0.001
+    tb_err = 0.5
+    z_error = np.sqrt(
+        (dv * tb_err) ** 2.0
+        + (w_err * (-traj_data[:, 2] + dv * (w_tb - mm_tb)) / (w_tb - mm_tb)) ** 2.0
+        + (mm_err * traj_data[:, 2] / (w_tb - mm_tb)) ** 2.0
+    )
     # uncertainty due to pad size, treat as rectangle
     x_error = cluster.data[:, 4] * BIG_PAD_HEIGHT * 0.5
     y_error = cluster.data[:, 4] * BIG_PAD_HEIGHT * 0.5 * np.sqrt(3) / 2
@@ -527,6 +547,8 @@ def fit_model_interp(
     det_params: DetectorParameters,
     w_tb: float,
     mm_tb: float,
+    w_err: float,
+    mm_err: float,
 ) -> Parameters | None:
     """Used for jupyter notebooks examining the good-ness of the model
 
@@ -542,6 +564,14 @@ def fit_model_interp(
         the interpolation scheme to be used
     det_params: DetectorParameters
         Configuration parameters for detector characteristics
+    w_tb: float
+        Window time bucket
+    mm_tb: float
+        Micromegas time bucket
+    w_err: float
+        Window time bucket error
+    mm_err: float
+        Micromegas time bucket error
 
     Returns
     -------
@@ -554,12 +584,19 @@ def fit_model_interp(
     if not interpolator.check_values_in_range(kinetic_energy, guess.polar):
         return None
 
-    # Uncertainty due to TB resolution in meters
-    z_error = (det_params.detector_length / float(w_tb - mm_tb) * 0.001) * 0.5
-    # uncertainty due to pad size, treat as box
-    xy_error = cluster.data[:, 4] * BIG_PAD_HEIGHT * 0.5
+    # Uncertainty due to z-position reconstruction
+    dv = det_params.detector_length / (w_tb - mm_tb) * 0.001
+    tb_err = 0.5
+    z_error = np.sqrt(
+        (dv * tb_err) ** 2.0
+        + (w_err * (-traj_data[:, 2] + dv * (w_tb - mm_tb)) / (w_tb - mm_tb)) ** 2.0
+        + (mm_err * traj_data[:, 2] / (w_tb - mm_tb)) ** 2.0
+    )
+    # uncertainty due to pad size, treat as rectangle
+    x_error = cluster.data[:, 4] * BIG_PAD_HEIGHT * 0.5
+    y_error = cluster.data[:, 4] * BIG_PAD_HEIGHT * 0.5 * np.sqrt(3) / 2
     # total positional variance per point
-    total_var = 2.0 * (xy_error**2.0) + z_error**2.0
+    total_var = x_error**2.0 + y_error**2.0 + z_error**2.0
     weights = 1.0 / total_var
 
     fit_params = create_params(guess, ejectile, interpolator, det_params)
