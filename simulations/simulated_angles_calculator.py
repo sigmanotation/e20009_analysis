@@ -6,23 +6,61 @@ from pathlib import Path
 from attpc_engine import nuclear_map
 
 # Configuration parameters
-kine_path = Path("/Volumes/e20009_sim/3.4_breit_wig_0-60/3.4_mev_kine.parquet")
-sim_directory = Path(
-    "/Volumes/e20009_sim/3.4_breit_wig_0-60/workspace/PointcloudLegacy"
-)
-write_path = Path("/Users/attpc/Desktop/")
+kine_path = Path("/Volumes/e20009_sim/1.78_mev_0-60cm/1.78_mev_kine.parquet")
+sim_directory = Path("/Volumes/e20009_sim/1.78_mev_0-60cm/workspace/PointcloudLegacy")
+write_path = Path("/Volumes/e20009_sim/1.78_mev_0-60cm")
 
 run_min = 1
-run_max = 16
+run_max = 20
 
 # Schema is [Z, A]
 target = [1, 2]
 beam = [4, 10]
 product = [4, 11]
 
+vertex_z_min = 0.004  # Units of meters
+vertex_z_max = 0.958  # Units of meters
 
-def find_sim_cm(kine_path, sim_directory, run_min, run_max):
-    """ """
+
+def find_sim_cm(
+    kine_path: Path,
+    sim_directory: Path,
+    run_min: int,
+    run_max: int,
+    target: list,
+    beam: list,
+    product: list,
+    vertex_z_min: float,
+    vertex_z_max: float,
+):
+    """
+    Finds the center of mass scattering angle of the input product in all the simulated events
+    that survived the detector effects.
+
+    Parameters
+    ----------
+    kine_path: Path
+        Path to the simulated kinematics parquet made with the convert-kinematics that
+        comes with attpc_engine.
+    sim_directory: Path
+        Path to the folder containing the point clouds made by Spyral from analyzing
+        the simulated data.
+    run_min: int
+        Minimum run number of simulated data.
+    run_max: int
+        Maximum run number of simulated data.
+    target: list
+        List of [Z, A] of target nucleus.
+    beam: list
+        List of [Z, A] of beam nucleus.
+    product: list
+        List of [Z, A] of product nucleus whose center of mass scattering angle will
+        be found.
+    vertex_z_min: float
+        Minimum vertex z-coordinate of points that survived detector effects.
+    vertex_z_max: float
+        Maximum vertex z-coordinate of points that survived detector effects.
+    """
     # Find events that survived applying detector effects
     events = np.empty(0, int)
     for run in range(run_min, run_max + 1):
@@ -47,7 +85,11 @@ def find_sim_cm(kine_path, sim_directory, run_min, run_max):
 
     # Find events in kinematics file that survived applying detector effects
     kine_f = pl.scan_parquet(kine_path)
-    kine_f = kine_f.filter(pl.col("event").is_in(events))
+    kine_f = kine_f.filter(
+        pl.col("event").is_in(events)
+        & (pl.col("vertex_z") >= vertex_z_min)
+        & (pl.col("vertex_z") <= vertex_z_max)
+    )
 
     beam_coords = (
         kine_f.filter((pl.col("Z") == beam[0]) & (pl.col("A") == beam[1]))
@@ -64,7 +106,7 @@ def find_sim_cm(kine_path, sim_directory, run_min, run_max):
         }
     )
 
-    ejectile_coords = (
+    product_coords = (
         kine_f.filter((pl.col("Z") == product[0]) & (pl.col("A") == product[1]))
         .select("px", "py", "pz", "energy")
         .collect()
@@ -72,10 +114,10 @@ def find_sim_cm(kine_path, sim_directory, run_min, run_max):
     )
     product_vectors = vector.array(
         {
-            "px": ejectile_coords[:, 0],
-            "py": ejectile_coords[:, 1],
-            "pz": ejectile_coords[:, 2],
-            "E": ejectile_coords[:, 3],
+            "px": product_coords[:, 0],
+            "py": product_coords[:, 1],
+            "pz": product_coords[:, 2],
+            "E": product_coords[:, 3],
         }
     )
 
@@ -85,4 +127,14 @@ def find_sim_cm(kine_path, sim_directory, run_min, run_max):
 
 
 if __name__ == "__main__":
-    find_sim_cm(kine_path, sim_directory, run_min, run_max)
+    find_sim_cm(
+        kine_path,
+        sim_directory,
+        run_min,
+        run_max,
+        target,
+        beam,
+        product,
+        vertex_z_min,
+        vertex_z_max,
+    )
