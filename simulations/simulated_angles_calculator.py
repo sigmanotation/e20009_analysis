@@ -4,22 +4,26 @@ import h5py as h5
 import numpy as np
 from pathlib import Path
 from attpc_engine import nuclear_map
+from spyral_utils.nuclear import NucleusData
 
 # Configuration parameters
-kine_path = Path("/Volumes/e20009_sim/1.78_mev_0-60cm/1.78_mev_kine.parquet")
-sim_directory = Path("/Volumes/e20009_sim/1.78_mev_0-60cm/workspace/PointcloudLegacy")
-write_path = Path("/Volumes/e20009_sim/1.78_mev_0-60cm")
+kine_path = Path("/Volumes/e20009_sim/3.4_mev_0-60cm/3.4_mev_kine.parquet")
+sim_directory = Path("/Volumes/e20009_sim/3.4_mev_0-60cm/workspace/PointcloudLegacy")
+write_path = Path("/Volumes/e20009_sim/3.4_mev_0-60cm")
 
 run_min = 1
-run_max = 20
+run_max = 12
 
-# Schema is [Z, A]
-target = [1, 2]
-beam = [4, 10]
-product = [4, 11]
+# Define reaction
+target: NucleusData = nuclear_map.get_data(1, 2)
+beam: NucleusData = nuclear_map.get_data(4, 10)
+product: NucleusData = nuclear_map.get_data(4, 11)
 
+# Specify analysis gates
 vertex_z_min = 0.004  # Units of meters
 vertex_z_max = 0.958  # Units of meters
+product_mass_low = 3.1 + product.mass  # Units of MeV
+product_mass_high = 3.7 + product.mass  # Units of MeV
 
 
 def find_sim_cm(
@@ -27,9 +31,9 @@ def find_sim_cm(
     sim_directory: Path,
     run_min: int,
     run_max: int,
-    target: list,
-    beam: list,
-    product: list,
+    target: NucleusData,
+    beam: NucleusData,
+    product: NucleusData,
     vertex_z_min: float,
     vertex_z_max: float,
 ):
@@ -67,6 +71,7 @@ def find_sim_cm(
         cloud_f = None
         path = sim_directory / f"run_{run:04d}.h5"
         if not path.exists():
+            print(f"{run} does not exist in the input directory!")
             continue
         cloud_f = h5.File(path, "r")
 
@@ -79,11 +84,11 @@ def find_sim_cm(
             "px": [0.0],
             "py": [0.0],
             "pz": [0.0],
-            "E": [nuclear_map.get_data(target[0], target[1]).mass],
+            "E": [target.mass],
         }
     )
 
-    # Find events in kinematics file that survived applying detector effects
+    # Find events in kinematics file that survived applying detector effects and vertex z-coordinate gate
     kine_f = pl.scan_parquet(kine_path)
     kine_f = kine_f.filter(
         pl.col("event").is_in(events)
@@ -92,7 +97,7 @@ def find_sim_cm(
     )
 
     beam_coords = (
-        kine_f.filter((pl.col("Z") == beam[0]) & (pl.col("A") == beam[1]))
+        kine_f.filter((pl.col("Z") == beam.Z) & (pl.col("A") == beam.A))
         .select("px", "py", "pz", "energy")
         .collect()
         .to_numpy()
@@ -107,7 +112,7 @@ def find_sim_cm(
     )
 
     product_coords = (
-        kine_f.filter((pl.col("Z") == product[0]) & (pl.col("A") == product[1]))
+        kine_f.filter((pl.col("Z") == product.Z) & (pl.col("A") == product.A))
         .select("px", "py", "pz", "energy")
         .collect()
         .to_numpy()
@@ -121,7 +126,14 @@ def find_sim_cm(
         }
     )
 
-    cm_ang_det = product_vectors.boostCM_of(beam_vectors + target_vector).theta
+    # Apply analysis excitation energy gate
+    mask: np.ndarray = (product_mass_low <= product_vectors.mass) & (
+        product_vectors.mass < product_mass_high
+    )
+
+    cm_ang_det = (
+        product_vectors[mask].boostCM_of(beam_vectors[mask] + target_vector).theta
+    )
 
     np.save(write_path / "cm_ang.npy", cm_ang_det)
 
