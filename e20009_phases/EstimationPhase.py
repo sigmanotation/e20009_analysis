@@ -464,7 +464,7 @@ def estimate_physics_pass(
     arclength = np.sqrt((np.diff(points, axis=0) ** 2.0).sum(axis=1)).sum()  # integrate
 
     dEdx = charge_deposited / arclength
-    
+
     # fill in our map
     results["event"].append(cluster.event)
     results["cluster_index"].append(cluster_index)
