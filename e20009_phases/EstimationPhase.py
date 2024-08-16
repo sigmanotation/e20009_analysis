@@ -408,6 +408,8 @@ def estimate_physics_pass(
     fit = linregress(cluster_data[:test_index, 2], rho_to_vertex[:test_index])
     vertex_rho = np.linalg.norm(vertex[:2])
     # Since we fit to rho_to_vertex, just find intercept point
+    if fit.slope == 0.0:
+        return (False, Direction.NONE)
     vertex[2] = -1.0 * fit.intercept / fit.slope  # type: ignore
     center[2] = vertex[2]
 
@@ -462,7 +464,7 @@ def estimate_physics_pass(
     arclength = np.sqrt((np.diff(points, axis=0) ** 2.0).sum(axis=1)).sum()  # integrate
 
     dEdx = charge_deposited / arclength
-
+    
     # fill in our map
     results["event"].append(cluster.event)
     results["cluster_index"].append(cluster_index)
