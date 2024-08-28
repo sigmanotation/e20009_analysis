@@ -319,6 +319,11 @@ class InterpLeastSqSolverPhase(PhaseLike):
         mm_err: float = dv_df.get_column("average_micromegas_tb_error")[0]
         w_err: float = dv_df.get_column("average_window_tb_error")[0]
 
+        # mm_tb: float = 60
+        # w_tb: float = 400
+        # mm_err: float = 0
+        # w_err: float = 0
+
         # Select the particle group data, beam region of ic, convert to dictionary for row-wise operations
         estimates_gated = (
             estimate_df.filter(
@@ -419,6 +424,8 @@ class InterpLeastSqSolverPhase(PhaseLike):
                 Direction.NONE,  # type: ignore
             )
             solve_physics_interp(
+                payload.run_number,
+                event,
                 cidx,
                 cluster,
                 guess,
@@ -440,6 +447,8 @@ class InterpLeastSqSolverPhase(PhaseLike):
 
 
 def solve_physics_interp(
+    run: int,
+    event: int,
     cluster_index: int,
     cluster: Cluster,
     guess: Guess,
@@ -468,6 +477,8 @@ def solve_physics_interp(
         the data for the particle being tracked
     interpolator: TrackInterpolator
         the interpolation scheme to be used
+    det_params: DetectorParameters
+        Configuration parameters for detector characteristics
     w_tb: float
         Window time bucket
     mm_tb: float
@@ -476,8 +487,6 @@ def solve_physics_interp(
         Window time bucket error
     mm_err: float
         Micromegas time bucket error
-    det_params: DetectorParameters
-        Configuration parameters for detector characteristics
     results: dict[str, list]
         storage for results from the fitting, which will later be written as a dataframe.
     """
@@ -504,12 +513,17 @@ def solve_physics_interp(
 
     fit_params = create_params(guess, ejectile, interpolator, det_params)
 
-    best_fit: MinimizerResult = minimize(
-        objective_function,
-        fit_params,
-        args=(traj_data, weights, interpolator, ejectile),
-        method="leastsq",
-    )
+    try:
+        best_fit: MinimizerResult = minimize(
+            objective_function,
+            fit_params,
+            args=(traj_data, weights, interpolator, ejectile),
+            method="leastsq",
+        )
+    except ValueError:
+        spyral_warn("spyral." + __name__,
+                f"Run {run} event {event} generated NaN's while fitting!",)
+        return 
 
     scale_factor = QBRHO_2_P * float(ejectile.Z)
     brho: float = best_fit.params["brho"].value  # type: ignore

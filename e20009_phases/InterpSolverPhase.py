@@ -320,6 +320,11 @@ class InterpSolverPhase(PhaseLike):
         mm_err: float = dv_df.get_column("average_micromegas_tb_error")[0]
         w_err: float = dv_df.get_column("average_window_tb_error")[0]
 
+        # mm_tb: float = 60
+        # w_tb: float = 400
+        # mm_err: float = 0
+        # w_err: float = 0
+
         # Select the particle group data, beam region of ic, convert to dictionary for row-wise operations
         estimates_gated = (
             estimate_df.filter(
@@ -420,6 +425,8 @@ class InterpSolverPhase(PhaseLike):
                 Direction.NONE,  # type: ignore
             )
             solve_physics_interp(
+                payload.run_number,
+                event,
                 cidx,
                 cluster,
                 guess,
@@ -441,6 +448,8 @@ class InterpSolverPhase(PhaseLike):
 
 
 def solve_physics_interp(
+    run: int,
+    event: int,
     cluster_index: int,
     cluster: Cluster,
     guess: Guess,
@@ -505,12 +514,17 @@ def solve_physics_interp(
 
     fit_params = create_params(guess, ejectile, interpolator, det_params)
 
-    best_fit: MinimizerResult = minimize(
-        objective_function,
-        fit_params,
-        args=(traj_data, weights, interpolator, ejectile),
-        method="lbfgsb",
-    )
+    try:
+        best_fit: MinimizerResult = minimize(
+            objective_function,
+            fit_params,
+            args=(traj_data, weights, interpolator, ejectile),
+            method="lbfgsb",
+        )
+    except ValueError:
+        spyral_warn("spyral." + __name__,
+                f"Run {run} event {event} generated NaN's while fitting!",)
+        return
 
     p = best_fit.params["brho"].value * QBRHO_2_P * ejectile.Z  # type: ignore
     ke = np.sqrt(p**2.0 + ejectile.mass**2.0) - ejectile.mass

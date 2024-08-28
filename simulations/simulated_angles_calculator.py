@@ -7,23 +7,23 @@ from attpc_engine import nuclear_map
 from spyral_utils.nuclear import NucleusData
 
 # Configuration parameters
-kine_path = Path("/Volumes/e20009_sim/3.4_mev_0-60cm/3.4_mev_kine.parquet")
-sim_directory = Path("/Volumes/e20009_sim/3.4_mev_0-60cm/workspace/PointcloudLegacy")
-write_path = Path("/Volumes/e20009_sim/3.4_mev_0-60cm")
+kine_path = Path("E:\\elastic_0-90cm\\elastic_kine.parquet")
+sim_directory = Path("E:\\elastic_0-90cm\\workspace\\PointcloudLegacy")
+write_path = Path("E:\\elastic_0-90cm")
 
 run_min = 1
-run_max = 12
+run_max = 21
 
 # Define reaction
 target: NucleusData = nuclear_map.get_data(1, 2)
 beam: NucleusData = nuclear_map.get_data(4, 10)
-product: NucleusData = nuclear_map.get_data(4, 11)
+product: NucleusData = nuclear_map.get_data(4, 10)
 
 # Specify analysis gates
 vertex_z_min = 0.004  # Units of meters
 vertex_z_max = 0.958  # Units of meters
-product_mass_low = 3.1 + product.mass  # Units of MeV
-product_mass_high = 3.7 + product.mass  # Units of MeV
+product_mass_low = -1.0 + product.mass  # Units of MeV
+product_mass_high = 1.0 + product.mass  # Units of MeV
 
 
 def find_sim_cm(
@@ -96,8 +96,16 @@ def find_sim_cm(
         & (pl.col("vertex_z") <= vertex_z_max)
     )
 
+    # beam_coords = (
+    #     kine_f.filter((pl.col("Z") == beam.Z) & (pl.col("A") == beam.A))
+    #     .select("px", "py", "pz", "energy")
+    #     .collect()
+    #     .to_numpy()
+    # )
+
+    # For cases where the beam and product are the same
     beam_coords = (
-        kine_f.filter((pl.col("Z") == beam.Z) & (pl.col("A") == beam.A))
+        kine_f.gather_every(4, offset=1)
         .select("px", "py", "pz", "energy")
         .collect()
         .to_numpy()
@@ -111,8 +119,16 @@ def find_sim_cm(
         }
     )
 
+    # product_coords = (
+    #     kine_f.filter((pl.col("Z") == product.Z) & (pl.col("A") == product.A))
+    #     .select("px", "py", "pz", "energy")
+    #     .collect()
+    #     .to_numpy()
+    # )
+
+    # For cases where the beam and product are the same
     product_coords = (
-        kine_f.filter((pl.col("Z") == product.Z) & (pl.col("A") == product.A))
+        kine_f.gather_every(4, offset=3)
         .select("px", "py", "pz", "energy")
         .collect()
         .to_numpy()
