@@ -507,7 +507,7 @@ def solve_physics_interp(
     )
     # uncertainty due to pad size, treat as rectangle
     x_error = cluster.data[:, 4] * BIG_PAD_HEIGHT * 0.5
-    y_error = cluster.data[:, 4] * BIG_PAD_HEIGHT * 0.5 * np.sqrt(3) / 2
+    y_error = cluster.data[:, 4] * BIG_PAD_HEIGHT / np.sqrt(3.0)
     # total positional variance per point
     total_var = x_error**2.0 + y_error**2.0 + z_error**2.0
     weights = 1.0 / total_var
@@ -608,7 +608,7 @@ def fit_model_interp(
     )
     # uncertainty due to pad size, treat as rectangle
     x_error = cluster.data[:, 4] * BIG_PAD_HEIGHT * 0.5
-    y_error = cluster.data[:, 4] * BIG_PAD_HEIGHT * 0.5 * np.sqrt(3) / 2
+    y_error = cluster.data[:, 4] * BIG_PAD_HEIGHT / np.sqrt(3.0)
     # total positional variance per point
     total_var = x_error**2.0 + y_error**2.0 + z_error**2.0
     weights = 1.0 / total_var
