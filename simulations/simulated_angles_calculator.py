@@ -110,6 +110,7 @@ def find_sim_cm(
         .collect()
         .to_numpy()
     )
+
     beam_vectors = vector.array(
         {
             "px": beam_coords[:, 0],
@@ -133,6 +134,7 @@ def find_sim_cm(
         .collect()
         .to_numpy()
     )
+
     product_vectors = vector.array(
         {
             "px": product_coords[:, 0],
