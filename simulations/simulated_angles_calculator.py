@@ -7,12 +7,12 @@ from attpc_engine import nuclear_map
 from spyral_utils.nuclear import NucleusData
 
 # Configuration parameters
-kine_path = Path("E:\\elastic_0-90cm\\elastic_kine.parquet")
-sim_directory = Path("E:\\elastic_0-90cm\\workspace\\PointcloudLegacy")
-write_path = Path("E:\\elastic_0-90cm")
+kine_path = Path("E:\\engine_v0.3.0\\inelastic_3.368mev_0-180cm\\inelastic_3.368.parquet")
+sim_directory = Path("E:\\engine_v0.3.0\\inelastic_3.368mev_0-180cm\\workspace\\PointcloudLegacy")
+write_path = Path("E:\\engine_v0.3.0\\inelastic_3.368mev_0-180cm")
 
 run_min = 1
-run_max = 21
+run_max = 19
 
 # Define reaction
 target: NucleusData = nuclear_map.get_data(1, 2)
@@ -20,10 +20,10 @@ beam: NucleusData = nuclear_map.get_data(4, 10)
 product: NucleusData = nuclear_map.get_data(4, 10)
 
 # Specify analysis gates
-vertex_z_min = 0.004  # Units of meters
-vertex_z_max = 0.958  # Units of meters
-product_mass_low = -1.0 + product.mass  # Units of MeV
-product_mass_high = 1.0 + product.mass  # Units of MeV
+vertex_z_min = 0.020  # Units of meters
+vertex_z_max = 0.700  # Units of meters
+product_mass_low = 2.6 + product.mass  # Units of MeV
+product_mass_high = 4.6 + product.mass  # Units of MeV
 
 
 def find_sim_cm(
@@ -34,8 +34,6 @@ def find_sim_cm(
     target: NucleusData,
     beam: NucleusData,
     product: NucleusData,
-    vertex_z_min: float,
-    vertex_z_max: float,
 ):
     """
     Finds the center of mass scattering angle of the input product in all the simulated events
@@ -60,10 +58,6 @@ def find_sim_cm(
     product: list
         List of [Z, A] of product nucleus whose center of mass scattering angle will
         be found.
-    vertex_z_min: float
-        Minimum vertex z-coordinate of points that survived detector effects.
-    vertex_z_max: float
-        Maximum vertex z-coordinate of points that survived detector effects.
     """
     # Find events that survived applying detector effects
     events = np.empty(0, int)
@@ -165,6 +159,4 @@ if __name__ == "__main__":
         target,
         beam,
         product,
-        vertex_z_min,
-        vertex_z_max,
     )

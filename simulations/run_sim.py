@@ -25,8 +25,8 @@ import numpy as np
 
 
 # Set output file paths for simulated kinematic events and point clouds
-kine_path = Path("E:\\engine_v0.3.0\\dp_0.32mev_0-60cm\\transfer_0.32mev_kine.h5")
-det_path = Path("E:\\engine_v0.3.0\\dp_0.32mev_0-60cm")
+kine_path = Path("E:\\3.4diff\\kine.h5")
+det_path = Path("E:\\3.4diff")
 
 target = GasTarget(
     TargetData(compound=[(1, 2, 2)], pressure=600.0, thickness=None), nuclear_map
@@ -96,7 +96,7 @@ pipeline = KinematicsPipeline(
         )
     ],
     [
-        ExcitationGaussian(0.32, 0.0),
+        ExcitationGaussian(3.4, 0.122),
         # ExcitationBreitWigner(
         #     rest_mass=nuclear_map.get_data(4, 11).mass,
         #     centroid=3.4,

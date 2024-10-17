@@ -24,8 +24,8 @@ import multiprocessing
 
 #########################################################################################################
 # Set up workspace and trace paths
-workspace_path = Path("D:\\e20009_all_new")
-trace_path = Path("D:\\h5")
+workspace_path = Path("C:\\Users\\zachs\\Desktop\\3.4_new_eng\\workspace")
+trace_path = Path("C:\\Users\\zachs\\Desktop\\3.4_new_eng\\workspace\\PointcloudLegacy")
 
 # Make directory to store beam events
 if not workspace_path.exists():
@@ -34,9 +34,9 @@ beam_events_folder = workspace_path / "beam_events"
 if not beam_events_folder.exists():
     beam_events_folder.mkdir()
 
-run_min = 108
-run_max = 366
-n_processes = 9
+run_min = 1
+run_max = 12
+n_processes = 6
 
 #########################################################################################################
 # Define configuration
@@ -85,11 +85,11 @@ det_params = DetectorParameters(
     garfield_file_path=Path(
         "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\e20009_efield_correction.txt"
     ),
-    do_garfield_correction=True,
+    do_garfield_correction=False,
 )
 
 cluster_params = ClusterParameters(
-    min_cloud_size=50,
+    min_cloud_size=20,#50,
     min_points=3,
     min_size_scale_factor=0.05,
     min_size_lower_cutoff=10,
@@ -108,10 +108,10 @@ solver_params = SolverParameters(
         "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\e20009_target.json"
     ),
     gain_match_factors_path=Path(
-        "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\gain_match_factors_new.csv"
+        "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\gain_match_factors.csv"
     ),
-    particle_id_filename=Path("D:\\e20009_all_new\\proton_pid.json"),
-    ic_min_val=450.0,
+    particle_id_filename=Path("E:\\engine_v0.3.0\\proton_id.json"),
+    ic_min_val=300.0,
     ic_max_val=850.0,
     n_time_steps=1300,
     interp_ke_min=0.01,
@@ -137,9 +137,9 @@ pipe = Pipeline(
             det_params,
         ),
         EstimationPhase(estimate_params, det_params),
-        InterpSolverPhase(solver_params, det_params),
-    ],
-    [False, False, False, True],
+        InterpLeastSqSolverPhase(solver_params, det_params),
+     ],
+    [False, True, True, True],
     workspace_path,
     trace_path,
 )
