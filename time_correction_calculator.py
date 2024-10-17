@@ -12,9 +12,9 @@ NUM_CHANNELS = 10240
 THRESHOLD = 0.1
 
 # Configuration parameters
-workspace_path = Path("D:\\test_pulser")
-write_path = Path("C:\\Users\\zachs\\Desktop\\gg")
-write_raw = True
+workspace_path = Path("D:\\tcorr")
+write_path = Path("C:\\Users\\zachs\\Desktop")
+write_raw = False
 run_min = 372
 run_max = 376
 
@@ -101,7 +101,7 @@ def time_correction_calculator(
     if write_raw is True:
         np.save(write_path / "time_correction_results.npy", results)
 
-    np.savetxt(write_path / "pad_time_correction.csv", fit_results[:, 1], newline=",\n", fmt="%.4f")
+    np.savetxt(write_path / "pad_time_correction.csv", fit_results[:, 1], header='tcorr', comments='', newline=",\n", fmt="%.4f")
 
 def pulser_results(workspace_path: Path, run: int):
     """

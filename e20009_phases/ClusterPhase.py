@@ -16,10 +16,9 @@ from multiprocessing import SimpleQueue
 from numpy.random import Generator
 
 """
-Changes from attpc_spyral package base code (circa June 1, 2024):
+Changes from attpc_spyral package base code (circa July 29, 2024):
     - ClusterPhase uses the PointCloud class defined in e20009_phases.PointcloudLegacyPhase.
-    - ClusterPhase run method appends the IC SCA centroid and multiplicity information to the result. 
-      Fixed small bug with nevents number being incorrect; 1 was added to it.
+    - ClusterPhase run method appends the IC SCA centroid and multiplicity information to the result.
 """
 
 
@@ -52,7 +51,7 @@ class ClusterPhase(PhaseLike):
         self, cluster_params: ClusterParameters, det_params: DetectorParameters
     ) -> None:
         super().__init__(
-            "Cluster", incoming_schema=POINTCLOUD_SCHEMA, outgoing_schema=CLUSTER_SCHEMA
+            "Cluster", incoming_schema=None, outgoing_schema=None
         )
         self.cluster_params = cluster_params
         self.det_params = det_params
@@ -130,17 +129,18 @@ class ClusterPhase(PhaseLike):
                 msg_queue.put(msg)
 
             cloud_data: h5.Dataset | None = None
-            try:
-                cloud_data = cloud_group[f"cloud_{idx}"]  # type: ignore
-            except Exception:
+            cloud_name = f"cloud_{idx}"
+            if cloud_name not in cloud_group:
                 continue
+            else:
+                cloud_data = cloud_group[cloud_name]  # type: ignore
 
             if cloud_data is None:
                 continue
 
             cloud = PointCloud()
             cloud.load_cloud_from_hdf5_data(cloud_data[:].copy(), idx)
-            
+
             # Here we don't need to use the labels array.
             # We just pass it along as needed.
             clusters, labels = form_clusters(cloud, self.cluster_params)

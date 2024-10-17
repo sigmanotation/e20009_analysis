@@ -10,7 +10,7 @@ import numpy as np
 
 class SpyralWriter_e20009:
     """
-    Writer for Spyral e20009 analysis. Writes the simulated data into multiple
+    Writer for default Spyral analysis. Writes the simulated data into multiple
     files to take advantage of Spyral's multiprocessing.
 
     Parameters
@@ -20,7 +20,10 @@ class SpyralWriter_e20009:
     config: Config
         The simulation configuration.
     max_file_size: int
-        The maximum file size of a point cloud file in bytes. Defualt value is 10 Gb.
+        The maximum file size of a point cloud file in bytes. Defualt value is 1 Gb.
+    first_run_number: int
+        The starting run number. You can use this to change the starting point for run files
+        (i.e. run_0000 or run_0008) to avoid overwritting previous results. Default is 0
 
     Attributes
     ----------
@@ -52,12 +55,16 @@ class SpyralWriter_e20009:
     """
 
     def __init__(
-        self, directory_path: Path, config: Config, max_file_size: int = int(5e9)
+        self,
+        directory_path: Path,
+        config: Config,
+        max_file_size: int = 1_000_000_000,
+        first_run_number=0,
     ):
         self.directory_path: Path = directory_path
         self.response: np.ndarray = get_response(config).copy()
         self.max_file_size: int = max_file_size
-        self.run_number = 0
+        self.run_number = first_run_number
         self.event_number_low = 0  # Kinematics generator always starts with event 0
         self.event_number_high = 0  # By default set to 0
         self.create_file()
@@ -88,9 +95,10 @@ class SpyralWriter_e20009:
         """
         # If current file is too large, make a new one
         if self.file_path.stat().st_size >= self.max_file_size:
-            self.set_number_of_events()
-            self.file.close()
+            self.close()
             self.create_file()
+            self.event_number_low = event_number
+            self.event_number_high = event_number
 
         if config.pad_centers is None:
             raise ValueError("Pad centers are not assigned at write!")
@@ -120,8 +128,6 @@ class SpyralWriter_e20009:
         dset.attrs["ic_sca_centroid"] = -1.0
         dset.attrs["ic_sca_multiplicity"] = -1.0
 
-        dset.flush()
-
     def set_number_of_events(self) -> None:
         """
         Writes the first and last written events as attributes to the current
@@ -129,11 +135,15 @@ class SpyralWriter_e20009:
         """
         self.cloud_group.attrs["min_event"] = self.event_number_low
         self.cloud_group.attrs["max_event"] = self.event_number_high
-        self.event_number_low = self.event_number_high
 
     def get_directory_name(self) -> Path:
         """
         Returns directory that point cloud files are written to.
+
+        Returns
+        -------
+        pathlib.Path
+            The path to the point cloud directory
         """
         return self.directory_path
 
@@ -144,6 +154,7 @@ class SpyralWriter_e20009:
         """
         self.set_number_of_events()
         self.file.close()
+
 
 
 # Used to determine the maximum energy for ExcitationUniform

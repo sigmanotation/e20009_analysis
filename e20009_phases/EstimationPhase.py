@@ -22,12 +22,10 @@ from spyral.geometry.circle import generate_circle_points, least_squares_circle
 import numpy as np
 import math
 from scipy.stats import linregress
-from enum import Enum
 
 """
-Changes from attpc_spyral package base code (circa June 1, 2024):
-    - EstimationPhase run method had small bug with nevents number being incorrect fixed; 1 was added
-      to it. Estimation results now includes IC SCA information written to the output parquet file. 
+Changes from attpc_spyral package base code (circa July 29, 2024):
+    - Estimation results now includes IC SCA information written to the output parquet file. 
       Including the IC SCA information means that we have to now add these parameters as
       inputs to all the functions downstream of it.
     - estimatephysics function now takes IC SCA information.
@@ -64,8 +62,8 @@ class EstimationPhase(PhaseLike):
     ):
         super().__init__(
             "Estimation",
-            incoming_schema=CLUSTER_SCHEMA,
-            outgoing_schema=ESTIMATE_SCHEMA,
+            incoming_schema=None,
+            outgoing_schema=None,
         )
         self.estimate_params = estimate_params
         self.det_params = det_params
@@ -148,6 +146,7 @@ class EstimationPhase(PhaseLike):
             "azimuthal": [],
             "brho": [],
             "dEdx": [],
+            "sqrt_dEdx": [],
             "dE": [],
             "arclength": [],
             "direction": [],
@@ -164,10 +163,11 @@ class EstimationPhase(PhaseLike):
                 msg_queue.put(msg)
 
             event: h5.Group | None = None
-            try:
-                event = cluster_group[f"event_{idx}"]  # type: ignore
-            except Exception:
+            event_name = f"event_{idx}"
+            if event_name not in cluster_group:
                 continue
+            else:
+                event = cluster_group[event_name]  # type: ignore
 
             nclusters: int = event.attrs["nclusters"]  # type: ignore
             ic_amp = float(event.attrs["ic_amplitude"])  # type: ignore
@@ -179,10 +179,11 @@ class EstimationPhase(PhaseLike):
             # Go through every cluster in each event
             for cidx in range(0, nclusters):
                 local_cluster: h5.Group | None = None
-                try:
-                    local_cluster = event[f"cluster_{cidx}"]  # type: ignore
-                except Exception:
+                cluster_name = f"cluster_{cidx}"
+                if cluster_name not in event:  # type: ignore
                     continue
+                else:
+                    local_cluster = event[cluster_name]  # type: ignore
 
                 cluster = Cluster(
                     idx, local_cluster.attrs["label"], local_cluster["cloud"][:].copy()  # type: ignore
@@ -364,6 +365,7 @@ def estimate_physics_pass(
         estimates the direction.
 
     """
+
     direction = chosen_direction
     vertex = np.array([0.0, 0.0, 0.0])  # reaction vertex
     center = np.array([0.0, 0.0, 0.0])  # spiral center
@@ -405,7 +407,10 @@ def estimate_physics_pass(
     # test_index = 10
     fit = linregress(cluster_data[:test_index, 2], rho_to_vertex[:test_index])
     vertex_rho = np.linalg.norm(vertex[:2])
-    vertex[2] = (vertex_rho - fit.intercept) / fit.slope  # type: ignore
+    # Since we fit to rho_to_vertex, just find intercept point
+    if fit.slope == 0.0:
+        return (False, Direction.NONE)
+    vertex[2] = -1.0 * fit.intercept / fit.slope  # type: ignore
     center[2] = vertex[2]
 
     # Toss tracks whose verticies are not close to the origin in x,y
@@ -480,6 +485,7 @@ def estimate_physics_pass(
     results["azimuthal"].append(azimuthal)
     results["brho"].append(brho)
     results["dEdx"].append(dEdx)
+    results["sqrt_dEdx"].append(np.sqrt(np.fabs(dEdx)))
     results["dE"].append(charge_deposited)
     results["arclength"].append(arclength)
     results["direction"].append(direction.value)

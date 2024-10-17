@@ -25,8 +25,8 @@ import numpy as np
 
 
 # Set output file paths for simulated kinematic events and point clouds
-kine_path = Path("/Volumes/e20009_sim/deuteron_bu_0-60/deut_bu_kine.h5")
-det_path = Path("/Volumes/e20009_sim/deuteron_bu_0-60/")
+kine_path = Path("E:\\3.4diff\\kine.h5")
+det_path = Path("E:\\3.4diff")
 
 target = GasTarget(
     TargetData(compound=[(1, 2, 2)], pressure=600.0, thickness=None), nuclear_map
@@ -39,51 +39,76 @@ nevents = 500000
 # At least 2.22 MeV is needed to break up the deuteron.
 # Remember, the min and max angles here are the cm angles for the proton
 # and we plot angular distributions wrt to the heavy residue, so subtract 180
-pipeline = KinematicsPipeline(
-    [
-        Reaction(
-            target=nuclear_map.get_data(1, 2),
-            projectile=nuclear_map.get_data(4, 10),
-            ejectile=nuclear_map.get_data(4, 10),
-        ),
-        Decay(parent=nuclear_map.get_data(1, 2), residual_1=nuclear_map.get_data(1, 1)),
-    ],
-    [
-        ExcitationUniform(2.2, 15.58),
-        ExcitationGaussian(0.0),
-    ],
-    [
-        PolarUniform(angle_min=0, angle_max=np.pi),
-        PolarUniform(angle_min=(2 * np.pi / 3), angle_max=np.pi),
-    ],
-    beam_energy=93.0,  # MeV
-    target_material=KinematicsTargetMaterial(
-        material=target, z_range=(0.0, 1.0), rho_sigma=0.02 / 3
-    ),
-)
-
-# 10Be(d,p) pipeline
 # pipeline = KinematicsPipeline(
 #     [
 #         Reaction(
 #             target=nuclear_map.get_data(1, 2),
 #             projectile=nuclear_map.get_data(4, 10),
-#             ejectile=nuclear_map.get_data(1, 1),
-#         )
+#             ejectile=nuclear_map.get_data(4, 10),
+#         ),
+#         Decay(parent=nuclear_map.get_data(1, 2), residual_1=nuclear_map.get_data(1, 1)),
 #     ],
 #     [
-#         ExcitationBreitWigner(
-#             rest_mass=nuclear_map.get_data(4, 11).mass,
-#             centroid=1.78,
-#             width=0.100,
-#         )
+#         ExcitationUniform(2.2, 15.66),
+#         ExcitationGaussian(0.0),
 #     ],
-#     [PolarUniform(angle_min=(2 * np.pi / 3), angle_max=np.pi)],
-#     beam_energy=93.0,  # MeV
+#     [
+#         PolarUniform(angle_min=0, angle_max=np.pi),
+#         PolarUniform(angle_min=(2 * np.pi / 3), angle_max=np.pi),
+#     ],
+#     beam_energy=93.5,  # MeV
 #     target_material=KinematicsTargetMaterial(
 #         material=target, z_range=(0.0, 1.0), rho_sigma=0.02 / 3
 #     ),
 # )
+
+# # 10Be(d,d) pipeline
+# pipeline = KinematicsPipeline(
+#     [
+#         Reaction(
+#             target=nuclear_map.get_data(1, 2),
+#             projectile=nuclear_map.get_data(4, 10),
+#             ejectile=nuclear_map.get_data(1, 2),
+#         )
+#     ],
+#     [
+#         ExcitationGaussian(3.368, 0.0),
+#         # ExcitationBreitWigner(
+#         #     rest_mass=nuclear_map.get_data(4, 11).mass,
+#         #     centroid=2.65,
+#         #     width=0.206,
+#         # )
+#     ],
+#     [PolarUniform(angle_min=0, angle_max=np.pi)],
+#     beam_energy=93.5,  # MeV
+#     target_material=KinematicsTargetMaterial(
+#         material=target, z_range=(0.0, 1.0), rho_sigma=0.02 / 3
+#     ),
+# )
+
+# 10Be(d,p) pipeline
+pipeline = KinematicsPipeline(
+    [
+        Reaction(
+            target=nuclear_map.get_data(1, 2),
+            projectile=nuclear_map.get_data(4, 10),
+            ejectile=nuclear_map.get_data(1, 1),
+        )
+    ],
+    [
+        ExcitationGaussian(3.4, 0.122),
+        # ExcitationBreitWigner(
+        #     rest_mass=nuclear_map.get_data(4, 11).mass,
+        #     centroid=3.4,
+        #     width=0.122,
+        # )
+    ],
+    [PolarUniform(angle_min=(2 * np.pi / 3), angle_max=np.pi)],
+    beam_energy=93.5,  # MeV
+    target_material=KinematicsTargetMaterial(
+        material=target, z_range=(0.0, 1.0), rho_sigma=0.02 / 3
+    ),
+)
 
 detector = DetectorParams(
     length=1.0,
@@ -91,7 +116,7 @@ detector = DetectorParams(
     bfield=3.0,
     mpgd_gain=175000,
     gas_target=target,
-    diffusion=0.277,
+    diffusion=0.0,
     fano_factor=0.2,
     w_value=34.0,
 )
@@ -124,8 +149,7 @@ def main():
     #     "target": nuclear_map.get_data(1, 2),
     #     "products": [nuclear_map.get_data(4, 10), nuclear_map.get_data(1, 2)],
     # }
-
-    # print(max_reaction_excitation_energy(reaction, 93))
+    # print(max_reaction_excitation_energy(reaction, 93.5))
 
 
 if __name__ == "__main__":
