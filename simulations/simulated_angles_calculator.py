@@ -7,8 +7,12 @@ from attpc_engine import nuclear_map
 from spyral_utils.nuclear import NucleusData
 
 # Configuration parameters
-kine_path = Path("E:\\engine_v0.3.0\\inelastic_3.368mev_0-180cm\\inelastic_3.368.parquet")
-sim_directory = Path("E:\\engine_v0.3.0\\inelastic_3.368mev_0-180cm\\workspace\\PointcloudLegacy")
+kine_path = Path(
+    "E:\\engine_v0.3.0\\inelastic_3.368mev_0-180cm\\inelastic_3.368.parquet"
+)
+sim_directory = Path(
+    "E:\\engine_v0.3.0\\inelastic_3.368mev_0-180cm\\workspace\\PointcloudLegacy"
+)
 write_path = Path("E:\\engine_v0.3.0\\inelastic_3.368mev_0-180cm")
 
 run_min = 1
@@ -22,8 +26,6 @@ product: NucleusData = nuclear_map.get_data(4, 10)
 # Specify analysis gates
 vertex_z_min = 0.020  # Units of meters
 vertex_z_max = 0.700  # Units of meters
-product_mass_low = 2.6 + product.mass  # Units of MeV
-product_mass_high = 4.6 + product.mass  # Units of MeV
 
 
 def find_sim_cm(
@@ -138,14 +140,13 @@ def find_sim_cm(
         }
     )
 
-    # Apply analysis excitation energy gate
-    mask: np.ndarray = (product_mass_low <= product_vectors.mass) & (
-        product_vectors.mass < product_mass_high
-    )
+    # Not in use
+    # # Apply analysis excitation energy gate
+    # mask: np.ndarray = (product_mass_low <= product_vectors.mass) & (
+    #     product_vectors.mass < product_mass_high
+    # )
 
-    cm_ang_det = (
-        product_vectors[mask].boostCM_of(beam_vectors[mask] + target_vector).theta
-    )
+    cm_ang_det = product_vectors.boostCM_of(beam_vectors + target_vector).theta
 
     np.save(write_path / "cm_ang.npy", cm_ang_det)
 
