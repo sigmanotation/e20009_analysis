@@ -325,14 +325,22 @@ class InterpLeastSqSolverPhase(PhaseLike):
         # w_err: float = 0
 
         # Select the particle group data, beam region of ic, convert to dictionary for row-wise operations
+        estimates_gated = estimate_df.filter(
+            pl.struct([xaxis, yaxis]).map_batches(pid.cut.is_cols_inside)
+            & (pl.col("ic_multiplicity") == 1)
+            & (pl.col("ic_sca_multiplicity") == 1)
+        )
         estimates_gated = (
-            estimate_df.filter(
-                pl.struct([xaxis, yaxis]).map_batches(pid.cut.is_cols_inside)
-                & (pl.col("ic_amplitude") > self.solver_params.ic_min_val)
-                & (pl.col("ic_amplitude") < self.solver_params.ic_max_val)
-                & (pl.col("ic_multiplicity") == 1.0)
-                & (pl.col("ic_sca_multiplicity") == 1.0)
-                & (abs(pl.col("ic_sca_multiplicity") - pl.col("ic_multiplicity")) <= 10)
+            estimates_gated.filter(
+                (pl.col("ic_amplitude").list.get(0) >= self.solver_params.ic_min_val)
+                & (pl.col("ic_amplitude").list.get(0) < self.solver_params.ic_max_val)
+                & (
+                    abs(
+                        pl.col("ic_centroid").list.get(0)
+                        - pl.col("ic_sca_centroid").list.get(0)
+                    )
+                    <= 10
+                )
             )
             .collect()
             .to_dict()
@@ -521,9 +529,11 @@ def solve_physics_interp(
             method="leastsq",
         )
     except ValueError:
-        spyral_warn("spyral." + __name__,
-                f"Run {run} event {event} generated NaN's while fitting!")
-        return 
+        spyral_warn(
+            "spyral." + __name__,
+            f"Run {run} event {event} generated NaN's while fitting!",
+        )
+        return
 
     scale_factor = QBRHO_2_P * float(ejectile.Z)
     brho: float = best_fit.params["brho"].value  # type: ignore

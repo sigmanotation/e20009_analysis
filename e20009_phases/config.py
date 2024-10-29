@@ -10,6 +10,7 @@ Changes from attpc_spyral package base code (circa July 29, 2024):
     - SolverParameters class has new parameter gain_match_factors_path.
 """
 
+
 @dataclass
 class ICParameters:
     """Parameters for IC trace signal analysis. Also includes downscale beam trace
@@ -89,9 +90,9 @@ class SolverParameters:
     particle_id_filename: Path
         Name of a particle ID cut file
     ic_min_val: float
-        Low value the desired beam region of the ion chamber spectrum
+        Low value of the desired beam region of the ion chamber spectrum (inclusive)
     ic_max_value: float
-        High value the desired beam region of the ion chamber spectrum
+        High value of the desired beam region of the ion chamber spectrum (exclusive)
     n_time_steps: int
         The number of timesteps used in the ODE solver
     interp_ke_min: float
