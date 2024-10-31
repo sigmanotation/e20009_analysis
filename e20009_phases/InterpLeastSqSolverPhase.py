@@ -332,15 +332,9 @@ class InterpLeastSqSolverPhase(PhaseLike):
         )
         estimates_gated = (
             estimates_gated.filter(
-                (pl.col("ic_amplitude").list.get(0) >= self.solver_params.ic_min_val)
-                & (pl.col("ic_amplitude").list.get(0) < self.solver_params.ic_max_val)
-                & (
-                    abs(
-                        pl.col("ic_centroid").list.get(0)
-                        - pl.col("ic_sca_centroid").list.get(0)
-                    )
-                    <= 10
-                )
+                (pl.col("ic_amplitude") >= self.solver_params.ic_min_val)
+                & (pl.col("ic_amplitude") < self.solver_params.ic_max_val)
+                & (abs(pl.col("ic_centroid") - pl.col("ic_sca_centroid")) <= 10)
             )
             .collect()
             .to_dict()
