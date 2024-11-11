@@ -25,15 +25,15 @@ import numpy as np
 
 
 # Set output file paths for simulated kinematic events and point clouds
-kine_path = Path("E:\\3.4diff\\kine.h5")
-det_path = Path("E:\\3.4diff")
+kine_path = Path("E:\\latest\\dp_3.4_0-60cm\\transfer_3.4_kine.h5")
+det_path = Path("E:\\latest\\dp_3.4_0-60cm")
 
 target = GasTarget(
     TargetData(compound=[(1, 2, 2)], pressure=600.0, thickness=None), nuclear_map
 )
 
 # Number of events to simulate
-nevents = 500000
+nevents = 1000000
 
 # Deuteron break up pipeline
 # At least 2.22 MeV is needed to break up the deuteron.
@@ -96,12 +96,12 @@ pipeline = KinematicsPipeline(
         )
     ],
     [
-        ExcitationGaussian(3.4, 0.122),
-        # ExcitationBreitWigner(
-        #     rest_mass=nuclear_map.get_data(4, 11).mass,
-        #     centroid=3.4,
-        #     width=0.122,
-        # )
+        # ExcitationGaussian(3.4, 0.122),
+        ExcitationBreitWigner(
+            rest_mass=nuclear_map.get_data(4, 11).mass,
+            centroid=3.4,
+            width=0.122,
+        )
     ],
     [PolarUniform(angle_min=(2 * np.pi / 3), angle_max=np.pi)],
     beam_energy=93.5,  # MeV
@@ -125,15 +125,15 @@ electronics = ElectronicsParams(
     clock_freq=3.125,
     amp_gain=900,
     shaping_time=1000,
-    micromegas_edge=60,
-    windows_edge=400,
+    micromegas_edge=62,
+    windows_edge=393,
     adc_threshold=30.0,
 )
 
 pads = PadParams()
 
 config = Config(detector, electronics, pads)
-writer = SpyralWriter_e20009(det_path, config)
+writer = SpyralWriter_e20009(det_path, config, max_events_per_file=100000)
 
 
 def main():

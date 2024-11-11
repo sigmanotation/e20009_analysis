@@ -19,20 +19,27 @@ class SpyralWriter_e20009:
         Path to directory to store simulated point cloud files.
     config: Config
         The simulation configuration.
-    max_file_size: int
-        The maximum file size of a point cloud file in bytes. Defualt value is 1 Gb.
+    max_events_per_file: int
+        The maximum number of events per file. Once this limit is reached, a new file is opened.
+        Default value is 5,000 events.
     first_run_number: int
         The starting run number. You can use this to change the starting point for run files
         (i.e. run_0000 or run_0008) to avoid overwritting previous results. Default is 0
 
     Attributes
     ----------
+    directory_path: pathlib.Path
+        The path to the directory data will be written to
     response: np.ndarray
         Response of GET electronics.
+    max_events_per_file: int
+        The maximum number of events per file
     run_number: int
         Run number of current point cloud file being written to.
-    file_path: Path
-        Path to current point cloud file being written to.
+    starting_event: int
+        The first event number of the file currently being written to
+    events_written: int
+        The number of events that have been written
     file: h5.File
         h5 file object. It is the actual point cloud file currently
         being written to.
@@ -41,41 +48,40 @@ class SpyralWriter_e20009:
 
     Methods
     -------
-    create_file() -> None:
-        Creates a new point cloud file.
     write(data: np.ndarray, config: Config, event_number: int) -> None
         Writes a simulated point cloud to the point cloud file.
-    set_number_of_events(n_events: int) -> None
-        Not currently used, but required to have this method.
     get_filename() -> Path
         Returns directory that point cloud files are written to.
     close() -> None
-        Closes the writer and ensures the current point cloud file being
-        written to has the first and last written events as attributes.
+        Closes the writer with metadata written
     """
 
     def __init__(
         self,
         directory_path: Path,
         config: Config,
-        max_file_size: int = 1_000_000_000,
+        max_events_per_file: int = 5_000,
         first_run_number=0,
     ):
         self.directory_path: Path = directory_path
         self.response: np.ndarray = get_response(config).copy()
-        self.max_file_size: int = max_file_size
+        self.max_events_per_file: int = max_events_per_file
         self.run_number = first_run_number
-        self.event_number_low = 0  # Kinematics generator always starts with event 0
-        self.event_number_high = 0  # By default set to 0
-        self.create_file()
+        self.starting_event = 0  # Kinematics generator always starts with event 0
+        self.events_written = 0  # haven't written anything yet
+        # initialize the first file
+        path: Path = self.directory_path / f"run_{self.run_number:04d}.h5"
+        self.file = h5.File(path, "w")
+        self.cloud_group: h5.Group = self.file.create_group("cloud")
 
-    def create_file(self) -> None:
-        """
-        Creates a new point cloud file.
+    def create_next_file(self) -> None:
+        """Creates the next point cloud file
+
+        Moves the run number forward and opens a new HDF5 file
+        with the appropriate groups.
         """
         self.run_number += 1
         path: Path = self.directory_path / f"run_{self.run_number:04d}.h5"
-        self.file_path: Path = path
         self.file = h5.File(path, "w")
         self.cloud_group: h5.Group = self.file.create_group("cloud")
 
@@ -93,12 +99,12 @@ class SpyralWriter_e20009:
         event_number: int
             Event number of simulated event from the kinematics file.
         """
-        # If current file is too large, make a new one
-        if self.file_path.stat().st_size >= self.max_file_size:
+        # If we reach the event limit, make a new file
+        if self.events_written == self.max_events_per_file:
             self.close()
-            self.create_file()
-            self.event_number_low = event_number
-            self.event_number_high = event_number
+            self.create_next_file()
+            self.starting_event = event_number
+            self.events_written = 0
 
         if config.pad_centers is None:
             raise ValueError("Pad centers are not assigned at write!")
@@ -109,36 +115,40 @@ class SpyralWriter_e20009:
             config.det_params.length,
             self.response,
             config.pad_centers,
+            config.pad_sizes,
             config.elec_params.adc_threshold,
         )
-
-        self.event_number_high = event_number
 
         dset = self.cloud_group.create_dataset(
             f"cloud_{event_number}", data=spyral_format
         )
 
+        dset.attrs["orig_run"] = self.run_number
+        dset.attrs["orig_event"] = event_number
         # No ic stuff from simulation
         dset.attrs["ic_amplitude"] = -1.0
         dset.attrs["ic_multiplicity"] = -1.0
         dset.attrs["ic_integral"] = -1.0
         dset.attrs["ic_centroid"] = -1.0
-
         # This is needed for experiment e20009
         dset.attrs["ic_sca_centroid"] = -1.0
         dset.attrs["ic_sca_multiplicity"] = -1.0
 
+        # We wrote an event
+        self.events_written += 1
+
     def set_number_of_events(self) -> None:
+        """Writes event metadata
+
+        Stores first and last event numbers in the attributes
         """
-        Writes the first and last written events as attributes to the current
-        point cloud file.
-        """
-        self.cloud_group.attrs["min_event"] = self.event_number_low
-        self.cloud_group.attrs["max_event"] = self.event_number_high
+        self.cloud_group.attrs["min_event"] = self.starting_event
+        self.cloud_group.attrs["max_event"] = (
+            self.starting_event + self.events_written - 1
+        )  # starting event counts towards number written
 
     def get_directory_name(self) -> Path:
-        """
-        Returns directory that point cloud files are written to.
+        """Returns directory that point cloud files are written to.
 
         Returns
         -------
@@ -148,9 +158,9 @@ class SpyralWriter_e20009:
         return self.directory_path
 
     def close(self) -> None:
-        """
-        Closes the writer and ensures the current point cloud file being
-        written to has the first and last written events as attributes.
+        """Closes the writer with metadata written
+
+        Ensures that the event range metadata is recorded
         """
         self.set_number_of_events()
         self.file.close()
