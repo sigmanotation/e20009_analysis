@@ -25,15 +25,15 @@ import numpy as np
 
 
 # Set output file paths for simulated kinematic events and point clouds
-kine_path = Path("E:\\latest\\dp_3.4_0-60cm\\transfer_3.4_kine.h5")
-det_path = Path("E:\\latest\\dp_3.4_0-60cm")
+kine_path = Path("E:\\newest\\dp_gs\\dp_gs_kine.h5")
+det_path = Path("E:\\newest\\dp_gs")
 
 target = GasTarget(
     TargetData(compound=[(1, 2, 2)], pressure=600.0, thickness=None), nuclear_map
 )
 
 # Number of events to simulate
-nevents = 1000000
+nevents = 1500000
 
 # Deuteron break up pipeline
 # At least 2.22 MeV is needed to break up the deuteron.
@@ -72,7 +72,7 @@ nevents = 1000000
 #         )
 #     ],
 #     [
-#         ExcitationGaussian(3.368, 0.0),
+#         ExcitationGaussian(3.37, 0.0),
 #         # ExcitationBreitWigner(
 #         #     rest_mass=nuclear_map.get_data(4, 11).mass,
 #         #     centroid=2.65,
@@ -96,15 +96,15 @@ pipeline = KinematicsPipeline(
         )
     ],
     [
-        # ExcitationGaussian(3.4, 0.122),
-        ExcitationBreitWigner(
-            rest_mass=nuclear_map.get_data(4, 11).mass,
-            centroid=3.4,
-            width=0.122,
-        )
+        ExcitationGaussian(0.0, 0.0),
+        # ExcitationBreitWigner(
+        #     rest_mass=nuclear_map.get_data(4, 11).mass,
+        #     centroid=2.65,
+        #     width=0.206,
+        # )
     ],
-    [PolarUniform(angle_min=(2 * np.pi / 3), angle_max=np.pi)],
-    beam_energy=93.5,  # MeV
+    [PolarUniform(angle_min=0, angle_max=np.pi)],
+    beam_energy=93.1,  # MeV
     target_material=KinematicsTargetMaterial(
         material=target, z_range=(0.0, 1.0), rho_sigma=0.02 / 3
     ),
@@ -126,14 +126,14 @@ electronics = ElectronicsParams(
     amp_gain=900,
     shaping_time=1000,
     micromegas_edge=62,
-    windows_edge=393,
+    windows_edge=396,
     adc_threshold=30.0,
 )
 
 pads = PadParams()
 
 config = Config(detector, electronics, pads)
-writer = SpyralWriter_e20009(det_path, config, max_events_per_file=100000)
+writer = SpyralWriter_e20009(det_path, config, max_events_per_file=50000)
 
 
 def main():
