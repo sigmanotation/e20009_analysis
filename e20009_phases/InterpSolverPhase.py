@@ -320,8 +320,8 @@ class InterpSolverPhase(PhaseLike):
         mm_err: float = dv_df.get_column("average_micromegas_tb_error")[0]
         w_err: float = dv_df.get_column("average_window_tb_error")[0]
 
-        # mm_tb: float = 60
-        # w_tb: float = 400
+        # mm_tb: float = 62
+        # w_tb: float = 396
         # mm_err: float = 0
         # w_err: float = 0
 
