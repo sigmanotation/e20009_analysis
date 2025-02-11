@@ -6,3 +6,4 @@ matplotlib==3.8.4
 nbformat==5.10.4
 plotly==5.21.0
 spyral_utils==1.1.0
+attpc_engine==0.6.0
