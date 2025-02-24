@@ -16,7 +16,6 @@ from spyral.interpolate.track_interpolator import (
 )
 from spyral.solvers.guess import Guess
 from spyral.solvers.solver_interp_leastsq import (
-    solve_physics_interp,
     create_params,
     objective_function,
 )
