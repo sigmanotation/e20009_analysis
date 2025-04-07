@@ -319,6 +319,7 @@ class InterpSolverPhase(PhaseLike):
         mm_err: float = dv_df.get_column("average_micromegas_tb_error")[0]
         w_err: float = dv_df.get_column("average_window_tb_error")[0]
 
+        # # FOR SIMULATIONS
         # mm_tb: float = 62
         # w_tb: float = 396
         # mm_err: float = 0
@@ -339,6 +340,12 @@ class InterpSolverPhase(PhaseLike):
             .collect()
             .to_dict()
         )
+
+        # # FOR SIMULATIONS
+        # # Select the particle group data, beam region of ic, convert to dictionary for row-wise operations
+        # estimates_gated = estimate_df.filter(
+        #     pl.struct([xaxis, yaxis]).map_batches(pid.cut.is_cols_inside)
+        # ).collect().to_dict()
 
         # Check that data actually exists for given PID
         if len(estimates_gated["event"]) == 0:

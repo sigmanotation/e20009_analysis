@@ -23,8 +23,8 @@ import multiprocessing
 
 #########################################################################################################
 # Set up workspace and trace paths
-workspace_path = Path("E:\\newest\\elastic\\workspace")
-trace_path = Path("E:\\newest\\elastic\\workspace\\PointcloudLegacy")
+workspace_path = Path("E:\\max_fix\\dp_3.40\\workspace")
+trace_path = Path("E:\\max_fix\\dp_3.40\\workspace\\PointcloudLegacy")
 
 # Make directory to store beam events
 if not workspace_path.exists():
@@ -34,7 +34,7 @@ if not beam_events_folder.exists():
     beam_events_folder.mkdir()
 
 run_min = 0
-run_max = 57
+run_max = 28
 n_processes = 10
 
 #########################################################################################################
@@ -102,27 +102,7 @@ estimate_params = EstimateParameters(
     min_total_trajectory_points=20, smoothing_factor=100.0
 )
 
-# # Protons
-# solver_params = SolverParameters(
-#     gas_data_path=Path(
-#         "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\e20009_target.json"
-#     ),
-#     gain_match_factors_path=Path(
-#         "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\gain_match_factors.csv"
-#     ),
-#     particle_id_filename=Path("E:\\newest\\proton_id.json"),
-#     ic_min_val=300.0,
-#     ic_max_val=850.0,
-#     n_time_steps=1300,
-#     interp_ke_min=0.01,
-#     interp_ke_max=40.0,
-#     interp_ke_bins=800,
-#     interp_polar_min=0.1,
-#     interp_polar_max=179.9,
-#     interp_polar_bins=500,
-# )
-
-# Deuterons
+# Protons
 solver_params = SolverParameters(
     gas_data_path=Path(
         "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\e20009_target.json"
@@ -130,17 +110,37 @@ solver_params = SolverParameters(
     gain_match_factors_path=Path(
         "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\gain_match_factors.csv"
     ),
-    particle_id_filename=Path("E:\\newest\\deuteron_id.json"),
+    particle_id_filename=Path("E:\\max_fix\\proton_id.json"),
     ic_min_val=300.0,
     ic_max_val=850.0,
     n_time_steps=1300,
     interp_ke_min=0.01,
-    interp_ke_max=80.0,
-    interp_ke_bins=1600,
+    interp_ke_max=40.0,
+    interp_ke_bins=800,
     interp_polar_min=0.1,
-    interp_polar_max=89.9,
-    interp_polar_bins=250,
+    interp_polar_max=179.9,
+    interp_polar_bins=500,
 )
+
+# # Deuterons
+# solver_params = SolverParameters(
+#     gas_data_path=Path(
+#         "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\e20009_target.json"
+#     ),
+#     gain_match_factors_path=Path(
+#         "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\gain_match_factors.csv"
+#     ),
+#     particle_id_filename=Path("E:\\max_fix\\deuteron_id.json"),
+#     ic_min_val=300.0,
+#     ic_max_val=850.0,
+#     n_time_steps=1300,
+#     interp_ke_min=0.01,
+#     interp_ke_max=80.0,
+#     interp_ke_bins=1600,
+#     interp_polar_min=0.1,
+#     interp_polar_max=89.9,
+#     interp_polar_bins=250,
+# )
 
 #########################################################################################################
 # Construct pipeline
@@ -159,7 +159,7 @@ pipe = Pipeline(
         EstimationPhase(estimate_params, det_params),
         InterpSolverPhase(solver_params, det_params),
      ],
-    [False, False, False, True],
+    [False, True, True, True],
     workspace_path,
     trace_path,
 )
