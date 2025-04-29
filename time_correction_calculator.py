@@ -14,7 +14,7 @@ THRESHOLD = 0.1
 # Configuration parameters
 workspace_path = Path("D:\\tcorr")
 write_path = Path("C:\\Users\\zachs\\Desktop")
-write_raw = False
+write_raw = True
 run_min = 372
 run_max = 376
 
@@ -61,7 +61,7 @@ def time_correction_calculator(
     num_runs = run_max - run_min + 1
 
     # Column schema is (time bucket, time bucket error, average amplitude)
-    results = np.zeros((NUM_CHANNELS, 3, num_runs))
+    results = np.zeros((NUM_CHANNELS, 4, num_runs))
     fit_results = np.zeros((NUM_CHANNELS, 2))
 
     # Find time correction factors from each pulser run
@@ -162,15 +162,13 @@ def pulser_results(workspace_path: Path, run: int):
         run_results[:, idx, 1] = evt_res[:, 1]  # Amplitude
         run_results[:, idx, 2] = evt_res[:, 2]  # Hit
 
-    # Make mask array masking pads that have many zero hits in an event
+    # Make mask array masking pads that have number of hits below the threshold
     mask = np.sum(run_results[:, :, 2], axis=1) < 0.1 * num_events
     mask_array = np.tile(mask, (num_events, 1)).T
     pad_tb_ma = np.ma.array(run_results[:, :, 0], mask=mask_array)
 
     # Find pad's average tb
     pad_tb_avg = np.ma.mean(pad_tb_ma, axis=1)
-    # NOTE this error is given by the standard deviation
-    # pad_tb_err = np.ma.std(pad_tb_ma, axis=1)
     pad_tb_err = np.ma.array(sem(pad_tb_ma.filled(0.0), axis=1), mask=mask)
 
     # Find run's average tb
@@ -188,7 +186,11 @@ def pulser_results(workspace_path: Path, run: int):
     pad_amp_avg = np.mean(run_results[:, :, 1], axis=1)
     pad_amp_avg[mask] = 0.0
 
-    return np.column_stack((tb_factors, tb_factors_err, pad_amp_avg))
+    # Find average amplitude error of each pad
+    pad_amp_err = sem(run_results[:, :, 1], axis=1)
+    pad_amp_err[mask] = 0.0
+
+    return np.column_stack((tb_factors, tb_factors_err, pad_amp_avg, pad_amp_err))
 
 
 @njit

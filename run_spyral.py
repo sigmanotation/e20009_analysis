@@ -5,7 +5,6 @@ from spyral import (
     ClusterParameters,
     EstimateParameters,
     PadParameters,
-    DEFAULT_LEGACY_MAP,
 )
 
 from e20009_phases.PointcloudLegacyPhase import PointcloudLegacyPhase
@@ -24,8 +23,8 @@ import multiprocessing
 
 #########################################################################################################
 # Set up workspace and trace paths
-workspace_path = Path("C:\\Users\\zachs\\Desktop\\3.4_new_eng\\workspace")
-trace_path = Path("C:\\Users\\zachs\\Desktop\\3.4_new_eng\\workspace\\PointcloudLegacy")
+workspace_path = Path("E:\\max_fix\\dp_3.40\\workspace")
+trace_path = Path("E:\\max_fix\\dp_3.40\\workspace\\PointcloudLegacy")
 
 # Make directory to store beam events
 if not workspace_path.exists():
@@ -34,9 +33,9 @@ beam_events_folder = workspace_path / "beam_events"
 if not beam_events_folder.exists():
     beam_events_folder.mkdir()
 
-run_min = 1
-run_max = 12
-n_processes = 6
+run_min = 0
+run_max = 28
+n_processes = 10
 
 #########################################################################################################
 # Define configuration
@@ -89,7 +88,7 @@ det_params = DetectorParameters(
 )
 
 cluster_params = ClusterParameters(
-    min_cloud_size=20,#50,
+    min_cloud_size=20,
     min_points=3,
     min_size_scale_factor=0.05,
     min_size_lower_cutoff=10,
@@ -103,6 +102,7 @@ estimate_params = EstimateParameters(
     min_total_trajectory_points=20, smoothing_factor=100.0
 )
 
+# Protons
 solver_params = SolverParameters(
     gas_data_path=Path(
         "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\e20009_target.json"
@@ -110,7 +110,7 @@ solver_params = SolverParameters(
     gain_match_factors_path=Path(
         "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\gain_match_factors.csv"
     ),
-    particle_id_filename=Path("E:\\engine_v0.3.0\\proton_id.json"),
+    particle_id_filename=Path("E:\\max_fix\\proton_id.json"),
     ic_min_val=300.0,
     ic_max_val=850.0,
     n_time_steps=1300,
@@ -121,6 +121,26 @@ solver_params = SolverParameters(
     interp_polar_max=179.9,
     interp_polar_bins=500,
 )
+
+# # Deuterons
+# solver_params = SolverParameters(
+#     gas_data_path=Path(
+#         "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\e20009_target.json"
+#     ),
+#     gain_match_factors_path=Path(
+#         "C:\\Users\\zachs\\Desktop\\e20009_analysis\\e20009_analysis\\e20009_parameters\\gain_match_factors.csv"
+#     ),
+#     particle_id_filename=Path("E:\\max_fix\\deuteron_id.json"),
+#     ic_min_val=300.0,
+#     ic_max_val=850.0,
+#     n_time_steps=1300,
+#     interp_ke_min=0.01,
+#     interp_ke_max=80.0,
+#     interp_ke_bins=1600,
+#     interp_polar_min=0.1,
+#     interp_polar_max=89.9,
+#     interp_polar_bins=250,
+# )
 
 #########################################################################################################
 # Construct pipeline
@@ -137,7 +157,7 @@ pipe = Pipeline(
             det_params,
         ),
         EstimationPhase(estimate_params, det_params),
-        InterpLeastSqSolverPhase(solver_params, det_params),
+        InterpSolverPhase(solver_params, det_params),
      ],
     [False, True, True, True],
     workspace_path,

@@ -16,7 +16,6 @@ from spyral.interpolate.track_interpolator import (
 )
 from spyral.solvers.guess import Guess
 from spyral.solvers.solver_interp import (
-    solve_physics_interp,
     create_params,
     objective_function,
 )
@@ -320,24 +319,33 @@ class InterpSolverPhase(PhaseLike):
         mm_err: float = dv_df.get_column("average_micromegas_tb_error")[0]
         w_err: float = dv_df.get_column("average_window_tb_error")[0]
 
-        # mm_tb: float = 60
-        # w_tb: float = 400
+        # # FOR SIMULATIONS
+        # mm_tb: float = 62
+        # w_tb: float = 396
         # mm_err: float = 0
         # w_err: float = 0
 
         # Select the particle group data, beam region of ic, convert to dictionary for row-wise operations
+        estimates_gated = estimate_df.filter(
+            pl.struct([xaxis, yaxis]).map_batches(pid.cut.is_cols_inside)
+            & (pl.col("ic_multiplicity") == 1)
+            & (pl.col("ic_sca_multiplicity") == 1)
+        )
         estimates_gated = (
-            estimate_df.filter(
-                pl.struct([xaxis, yaxis]).map_batches(pid.cut.is_cols_inside)
-                & (pl.col("ic_amplitude") > self.solver_params.ic_min_val)
+            estimates_gated.filter(
+                (pl.col("ic_amplitude") >= self.solver_params.ic_min_val)
                 & (pl.col("ic_amplitude") < self.solver_params.ic_max_val)
-                & (pl.col("ic_multiplicity") == 1.0)
-                & (pl.col("ic_sca_multiplicity") == 1.0)
-                & (abs(pl.col("ic_sca_multiplicity") - pl.col("ic_multiplicity")) <= 10)
+                & (abs(pl.col("ic_centroid") - pl.col("ic_sca_centroid")) <= 10)
             )
             .collect()
             .to_dict()
         )
+
+        # # FOR SIMULATIONS
+        # # Select the particle group data, beam region of ic, convert to dictionary for row-wise operations
+        # estimates_gated = estimate_df.filter(
+        #     pl.struct([xaxis, yaxis]).map_batches(pid.cut.is_cols_inside)
+        # ).collect().to_dict()
 
         # Check that data actually exists for given PID
         if len(estimates_gated["event"]) == 0:
@@ -522,8 +530,10 @@ def solve_physics_interp(
             method="lbfgsb",
         )
     except ValueError:
-        spyral_warn("spyral." + __name__,
-                f"Run {run} event {event} generated NaN's while fitting!",)
+        spyral_warn(
+            "spyral." + __name__,
+            f"Run {run} event {event} generated NaN's while fitting!",
+        )
         return
 
     p = best_fit.params["brho"].value * QBRHO_2_P * ejectile.Z  # type: ignore

@@ -59,9 +59,16 @@ def main(workspace_path: Path, traces_path: Path, run_min: int, run_max: int):
 
         # Apply gates to find desired beam events
         df: pl.DataFrame = df.filter(
-            (pl.col("ic_multiplicity") == 1)
-            & (pl.col("ic_sca_multiplicity") == 1)
-            & (abs(pl.col("ic_sca_multiplicity") - pl.col("ic_multiplicity")) <= 10)
+            (pl.col("ic_multiplicity") == 1) & (pl.col("ic_sca_multiplicity") == 1)
+        )
+        df = df.filter(
+            (
+                abs(
+                    pl.col("ic_centroid").list.get(0)
+                    - pl.col("ic_sca_centroid").list.get(0)
+                )
+                <= 10
+            )
             & (pl.col("ic_amplitude").list.get(0) > 700)
         )
         events: np.array = df.select(pl.col("event")).to_numpy().flatten()
