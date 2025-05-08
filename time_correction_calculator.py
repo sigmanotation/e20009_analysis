@@ -78,9 +78,8 @@ def time_correction_calculator(
 
         linear_fit = lmfit.models.LinearModel()
 
-        weights = np.sqrt(results[pad, 1, :])
         weights = np.divide(
-            1, weights, out=np.zeros_like(weights), where=weights != 0.0
+            1, results[pad, 1, :], out=np.zeros_like(results[pad, 1, :]), where=results[pad, 1, :] != 0.0
         )
 
         pars = linear_fit.guess(
